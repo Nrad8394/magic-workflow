@@ -43,21 +43,28 @@ login.)
       --clientid=nextcloud \
       --clientsecret=<OIDC_NEXTCLOUD_SECRET from .env> \
       --discoveryuri=https://id.<domain>/realms/magicworkflow/.well-known/openid-configuration \
-      --mapping-uid=preferred_username --mapping-email=email --mapping-displayName=name"
+      --mapping-uid=preferred_username --mapping-email=email --mapping-display-name=name"
     ```
 
 ## Connect Mattermost
 
-System Console → **Authentication → OpenID Connect**:
+Mattermost SSO is **pre-wired via environment variables** (the `mattermost`
+service points its GitLab-OAuth slot at the Keycloak realm — that's how Team
+Edition does OIDC). A "GitLab" login button appears and redirects to Keycloak;
+the Mattermost container trusts the edge cert for the server-side token calls.
 
-| Field | Value |
-|-------|-------|
-| Discovery Endpoint | `https://id.<domain>/realms/magicworkflow/.well-known/openid-configuration` |
-| Client ID | `mattermost` |
-| Client Secret | `OIDC_MATTERMOST_SECRET` from `.env` |
+!!! warning "Team Edition limitation"
+    Mattermost **Team Edition** maps logins through its GitLab provider, which
+    expects a **numeric** user `id`. Keycloak's `sub` is a UUID, so the login may
+    be rejected after authentication unless you add a Keycloak protocol mapper
+    that emits a numeric `id` claim on the `mattermost` client (see the
+    [community guide](https://medium.com/@anseliv/configure-keycloak-22-as-sso-instead-of-gitlab-for-mattermost-teams-edition-dff21f489eba)).
+    Native, fully-supported OIDC is a Mattermost **Enterprise** feature. Until
+    then, Mattermost local accounts work normally, and **Nextcloud SSO is the
+    clean, fully-working showcase**.
 
-Team Edition exposes OpenID Connect via the GitLab/OpenID settings; the
-pre-created client already lists Mattermost's redirect URIs.
+The pre-created realm `mattermost` client already lists the redirect URIs and the
+secret is wired from `OIDC_MATTERMOST_SECRET`.
 
 ## Connect Collabora / others
 

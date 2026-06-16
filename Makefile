@@ -21,13 +21,23 @@ trust-cert:            ## Trust the local self-signed cert in your OS store (sto
 
 # ── LIFECYCLE ────────────────────────────────────────────────────────────────
 .PHONY: up
-up: check-env          ## Start the CORE suite (proxy, db, redis, minio, keycloak, apps)
+up: check-env          ## Start the CORE suite + auto-wire SSO/Office (plug-and-play)
 	$(COMPOSE) up -d
-	@echo "Up. Run 'make urls' for links, 'make logs' to watch boot."
+	@bash scripts/configure.sh
+	@echo "Up. Run 'make urls' for links, 'make doctor' to verify."
 
 .PHONY: up-full
-up-full: check-env     ## Start core + monitoring + ops (Prometheus/Grafana/Loki/backup/watchtower)
+up-full: check-env     ## Start core + monitoring + ops, then auto-wire SSO/Office
 	$(FULL) up -d
+	@bash scripts/configure.sh
+
+.PHONY: configure
+configure: check-env   ## (Re)apply SSO + Office wiring (idempotent)
+	@bash scripts/configure.sh
+
+.PHONY: doctor
+doctor: check-env      ## Health-check every service + print browser setup you must do
+	@bash scripts/doctor.sh
 
 .PHONY: up-build
 up-build: check-env    ## Pull latest images then start core

@@ -276,29 +276,9 @@ services:
       TZ: ${TZ}
     networks: [internal]
 
-  # One-shot: wires Nextcloud SSO (Keycloak) + Office (Collabora) once the
-  # dependencies are healthy. Runs on every `make up`; idempotent; then exits.
-  nextcloud-configure:
-    image: nextcloud:${NEXTCLOUD_IMAGE_TAG}
-    depends_on:
-      nextcloud-app:
-        condition: service_healthy
-      keycloak:
-        condition: service_healthy
-      collabora:
-        condition: service_healthy
-    volumes:
-      - nextcloud_app:/var/www/html
-      - ./config/nextcloud/hooks/configure.sh:/configure.sh:ro
-      - ./config/proxy/tls/fullchain.pem:/magic-ca.pem:ro
-    entrypoint: ["/bin/sh", "/configure.sh"]
-    environment:
-      OIDC_NEXTCLOUD_SECRET: ${OIDC_NEXTCLOUD_SECRET}
-      KEYCLOAK_HOST: ${KEYCLOAK_HOST}
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-      COLLABORA_HOST: ${COLLABORA_HOST}
-    restart: "no"
-    networks: [internal]
+  # (Nextcloud SSO + Office are wired by `make up` via scripts/configure.sh,
+  #  which waits for Keycloak/Collabora to be healthy then applies the config.
+  #  A one-shot compose service proved unreliable, so it's driven from make.)
 
   # ──────────────────────────────── MATTERMOST ───────────────────────────────
   mattermost:
@@ -333,6 +313,18 @@ services:
       MM_FILESETTINGS_AMAZONS3SECRETACCESSKEY: ${S3_SECRET_KEY}
       MM_FILESETTINGS_AMAZONS3SSL: "false"
       MM_FILESETTINGS_AMAZONS3PATHPREFIX: ""
+      # ── SSO via Keycloak (Team Edition uses the GitLab OAuth slot for OIDC) ──
+      # Works cleanly with REAL certs + a numeric-id Keycloak mapper. Locally
+      # (self-signed) the token call won't verify; see docs/sso.md. Mattermost
+      # local accounts work regardless. Set ...ENABLEINSECUREOUTGOINGCONNECTIONS
+      # =true only if you accept insecure outgoing TLS for local testing.
+      MM_GITLABSETTINGS_ENABLE: "true"
+      MM_GITLABSETTINGS_ID: mattermost
+      MM_GITLABSETTINGS_SECRET: ${OIDC_MATTERMOST_SECRET}
+      MM_GITLABSETTINGS_SCOPE: "openid profile email"
+      MM_GITLABSETTINGS_AUTHENDPOINT: https://${KEYCLOAK_HOST}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/auth
+      MM_GITLABSETTINGS_TOKENENDPOINT: https://${KEYCLOAK_HOST}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token
+      MM_GITLABSETTINGS_USERAPIENDPOINT: https://${KEYCLOAK_HOST}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/userinfo
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8065/api/v4/system/ping"]
       interval: 30s
@@ -355,7 +347,11 @@ services:
       aliasgroup1: https://${NEXTCLOUD_HOST}:443
       username: ${COLLABORA_USERNAME}
       password: ${COLLABORA_PASSWORD}
-      extra_params: --o:ssl.enable=false --o:ssl.termination=true
+      # ssl.termination: TLS ends at the edge proxy (Collabora speaks HTTP internally).
+      # storage.ssl.cert_check=false: don't verify Nextcloud's cert on the WOPI
+      # callback (needed for local self-signed; safe on the internal network).
+      # With real certs you can drop the cert_check override.
+      extra_params: --o:ssl.enable=false --o:ssl.termination=true --o:storage.ssl.enable=true --o:storage.ssl.cert_check=false
     healthcheck:
       # The collabora image has no curl/wget; bash + /dev/tcp is available.
       test: ["CMD-SHELL", "bash -c '(exec 3<>/dev/tcp/127.0.0.1/9980)' || exit 1"]
