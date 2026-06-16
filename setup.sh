@@ -57,15 +57,25 @@ envsubst '${KEYCLOAK_REALM} ${NEXTCLOUD_HOST} ${MATTERMOST_HOST} ${OIDC_NEXTCLOU
   > config/keycloak/magicworkflow-realm.json
 echo "    -> config/keycloak/magicworkflow-realm.json"
 
-# ── 4. self-signed wildcard TLS cert ─────────────────────────────────────────
+# ── 4. wildcard TLS cert (mkcert if available, else self-signed) ──────────────
 TLS=config/proxy/tls
 mkdir -p "$TLS"
+CERT_HINT=""
 if [[ ! -f "$TLS/fullchain.pem" || "${1:-}" == "--force-certs" ]]; then
-  echo "==> Generating self-signed wildcard cert for *.${BASE_DOMAIN}"
-  openssl req -x509 -nodes -newkey rsa:2048 -days 825 \
-    -keyout "$TLS/privkey.pem" -out "$TLS/fullchain.pem" \
-    -subj "/CN=*.${BASE_DOMAIN}" \
-    -addext "subjectAltName=DNS:*.${BASE_DOMAIN},DNS:${BASE_DOMAIN},DNS:localhost"
+  if command -v mkcert >/dev/null 2>&1; then
+    echo "==> Generating locally-trusted cert with mkcert for *.${BASE_DOMAIN}"
+    mkcert -install 2>/dev/null || true
+    mkcert -cert-file "$TLS/fullchain.pem" -key-file "$TLS/privkey.pem" \
+      "*.${BASE_DOMAIN}" "${BASE_DOMAIN}" localhost
+    CERT_HINT="mkcert installed a local CA — browsers on THIS machine trust it automatically."
+  else
+    echo "==> Generating self-signed wildcard cert for *.${BASE_DOMAIN}"
+    openssl req -x509 -nodes -newkey rsa:2048 -days 825 \
+      -keyout "$TLS/privkey.pem" -out "$TLS/fullchain.pem" \
+      -subj "/CN=*.${BASE_DOMAIN}" \
+      -addext "subjectAltName=DNS:*.${BASE_DOMAIN},DNS:${BASE_DOMAIN},DNS:localhost"
+    CERT_HINT="Self-signed cert — run 'make trust-cert' to remove browser warnings (or install mkcert and re-run 'make setup')."
+  fi
 else
   echo "==> TLS cert present (pass --force-certs to rotate)"
 fi
@@ -84,6 +94,8 @@ Then:
   make up          # start the core suite
   make urls        # print every service URL + admin login
   make logs        # follow logs
+
+TLS: ${CERT_HINT}
 
 Open the dashboard:  https://${HOMER_HOST}
 EOF

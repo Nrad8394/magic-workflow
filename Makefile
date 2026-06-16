@@ -15,6 +15,10 @@ check-env:
 setup:                 ## First-time setup: .env + secrets + Keycloak realm + TLS cert
 	@bash setup.sh
 
+.PHONY: trust-cert
+trust-cert:            ## Trust the local self-signed cert in your OS store (stops browser warnings)
+	@bash scripts/trust-cert.sh
+
 # ── LIFECYCLE ────────────────────────────────────────────────────────────────
 .PHONY: up
 up: check-env          ## Start the CORE suite (proxy, db, redis, minio, keycloak, apps)
