@@ -18,6 +18,8 @@ set -u
 WWW=/var/www/html
 APPS="$WWW/custom_apps"
 mkdir -p "$APPS"
+# (The edge cert is trusted by the container entrypoint wrapper, which runs as
+#  root — this before-starting hook runs as www-data, so it can't update CAs.)
 
 # Run occ as the web user regardless of who invokes this script.
 occ() {

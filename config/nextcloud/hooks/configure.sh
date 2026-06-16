@@ -12,6 +12,12 @@ set -u
 WWW=/var/www/html
 occ() { su -s /bin/sh -c "php $WWW/occ $*" www-data; }
 
+# Trust the edge proxy cert so OIDC discovery / WOPI server-side calls verify.
+if [ -f /magic-ca.pem ]; then
+  cp /magic-ca.pem /usr/local/share/ca-certificates/magic-workflow.crt 2>/dev/null \
+    && update-ca-certificates >/dev/null 2>&1 || true
+fi
+
 echo "[configure] ensuring required apps are enabled"
 occ app:enable user_oidc     >/dev/null 2>&1 || true
 occ app:enable richdocuments >/dev/null 2>&1 || true
