@@ -109,6 +109,10 @@ nc-fix:                ## Apply Nextcloud recommended DB indices etc. (after fir
 	$(OCC) db:add-missing-columns
 	$(OCC) maintenance:repair --include-expensive
 
+.PHONY: office-connect
+office-connect:        ## Install Nextcloud Office + point it at Collabora (needs internet once)
+	@bash scripts/office-connect.sh
+
 .PHONY: mmctl
 mmctl:                 ## Run a Mattermost mmctl command: make mmctl CMD="user list"
 	$(COMPOSE) exec mattermost mmctl --local $(CMD)

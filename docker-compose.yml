@@ -55,7 +55,21 @@ services:
       GRAFANA_HOST: ${GRAFANA_HOST}
       HOMER_HOST: ${HOMER_HOST}
       MINIO_CONSOLE_HOST: ${MINIO_CONSOLE_HOST}
-    networks: [edge, internal]
+    networks:
+      edge: {}
+      internal:
+        # Let internal containers resolve the public hostnames to the proxy, so
+        # Nextcloud <-> Collabora (WOPI) work server-side on one host. These are
+        # the default magic.localhost names; if you change BASE_DOMAIN, update
+        # them to match (or rely on DNS that resolves internally).
+        aliases:
+          - cloud.magic.localhost
+          - chat.magic.localhost
+          - office.magic.localhost
+          - id.magic.localhost
+          - s3.magic.localhost
+          - grafana.magic.localhost
+          - dash.magic.localhost
 
   # ──────────────────────────── SHARED BACKENDS ──────────────────────────────
   db:

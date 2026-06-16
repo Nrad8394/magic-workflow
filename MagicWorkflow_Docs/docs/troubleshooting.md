@@ -56,8 +56,23 @@ docker compose exec minio mc admin user svcacct list local <root-user>
 
 The image has no `curl`/`wget`; the healthcheck uses a bash `/dev/tcp` probe.
 The systemplate "read-only" warnings in its log are performance notes, not
-errors. Office editing works once Nextcloud's **Nextcloud Office** app points at
-`https://office.<domain>`.
+errors.
+
+## "office.<domain> just shows OK / isn't an app"
+
+That's expected — Collabora is a **backend**, not a page you browse. You edit
+documents **inside Nextcloud**. Connect them once:
+
+```bash
+make office-connect      # installs the Nextcloud Office app + points it at Collabora
+```
+
+This needs the Nextcloud container to reach `apps.nextcloud.com` **once** to
+download the app (`make office-connect` prints a clear message if it can't —
+fix container egress/DNS, or install "Nextcloud Office" from the Apps UI). The
+edge proxy is given internal network aliases so Nextcloud ↔ Collabora resolve
+each other's hostnames on a single host. The admin console (basic-auth with
+`COLLABORA_USERNAME`/`PASSWORD`) is at `…/browser/dist/admin/admin.html`.
 
 ## SSO login fails / redirect mismatch
 
