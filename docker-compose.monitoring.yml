@@ -67,7 +67,9 @@ services:
       - --path.rootfs=/host
     pid: host
     volumes:
-      - /:/host:ro,rslave
+      # Plain :ro (not rslave) — rslave needs the host '/' to be a shared/slave
+      # mount, which fails on WSL2/Docker Desktop ("path / is not shared or slave").
+      - /:/host:ro
     networks: [internal]
 
   # ── Ops ──────────────────────────────────────────────────────────────────
@@ -82,6 +84,9 @@ services:
       WATCHTOWER_CLEANUP: "true"
       WATCHTOWER_SCHEDULE: "0 0 4 * * *"   # 04:00 daily; review before enabling auto-update in prod
       WATCHTOWER_LABEL_ENABLE: "true"       # only update containers opted-in via label
+      # Pin the Docker API version — watchtower 1.7.1 negotiates v1.25, which
+      # modern daemons (Docker 25+/API >= 1.40) reject. 1.44 is widely supported.
+      DOCKER_API_VERSION: "1.44"
     networks: [internal]
 
   backup:
