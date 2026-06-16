@@ -1,4 +1,7 @@
 # Collabora Online (Nextcloud Office) vhost.
+# NOTE: proxy_set_header does NOT inherit into a location that defines any of its
+# own, so every proxy header this backend needs is set explicitly here. Collabora
+# checks the Origin against the Host it receives — Host MUST be the public name.
 server {
     listen 443 ssl;
     http2 on;
@@ -7,13 +10,16 @@ server {
     ssl_certificate     /etc/nginx/tls/fullchain.pem;
     ssl_certificate_key /etc/nginx/tls/privkey.pem;
 
-    # Static files, discovery, WOPI, websocket — all proxied to collabora:9980.
     location / {
         set $upstream http://collabora:9980;
         proxy_pass $upstream;
         proxy_http_version 1.1;
+        proxy_set_header Host $host;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 36000s;
     }
 }
