@@ -28,7 +28,14 @@ wait_healthy nextcloud-app
 wait_healthy keycloak
 wait_healthy collabora
 
-# 1. Trust the edge cert in Nextcloud's own bundle (server-side OIDC/WOPI).
+# 1a. Allow Nextcloud's HTTP client to reach our services on the internal Docker
+#     network (private IPs). Without this, SSRF protection raises
+#     LocalServerException and OIDC discovery + Collabora WOPI both fail.
+$OCC config:system:set allow_local_remote_servers --value=true --type=boolean >/dev/null 2>&1 \
+  && echo "   [ok] allow_local_remote_servers enabled" \
+  || echo "   [!!] could not set allow_local_remote_servers"
+
+# 1b. Trust the edge cert in Nextcloud's own bundle (server-side OIDC/WOPI).
 $OCC security:certificates:import /magic-ca.pem >/dev/null 2>&1 \
   && echo "   [ok] edge cert trusted by Nextcloud" \
   || echo "   [!!] cert import failed"

@@ -35,6 +35,10 @@ $OCC app:list 2>/dev/null | grep -q user_oidc     && echo "  [ OK ] user_oidc in
 $OCC app:list 2>/dev/null | grep -q richdocuments && echo "  [ OK ] richdocuments installed" || echo "  [FAIL] richdocuments missing (make nc-apps)"
 $OCC user_oidc:provider 2>/dev/null | grep -q Keycloak && echo "  [ OK ] Keycloak OIDC provider registered" || echo "  [FAIL] OIDC provider missing (make configure)"
 $OCC security:certificates 2>/dev/null | grep -q magic && echo "  [ OK ] edge cert trusted by Nextcloud" || echo "  [FAIL] edge cert not trusted (make configure)"
+case "$($OCC config:system:get allow_local_remote_servers 2>/dev/null)" in 1|true) echo "  [ OK ] local remote servers allowed (SSRF rule)";; *) echo "  [FAIL] allow_local_remote_servers off (make configure)";; esac
+# Definitive: does Nextcloud reach Keycloak's auth (303 redirect)?
+LRC=$(curl -sk -m 10 -o /dev/null -w "%{http_code}" --resolve "$(get NEXTCLOUD_HOST):${HP}:127.0.0.1" --resolve "$(get KEYCLOAK_HOST):${HP}:127.0.0.1" "https://$(get NEXTCLOUD_HOST)/index.php/apps/user_oidc/login/1" 2>/dev/null)
+case "$LRC" in 30*) echo "  [ OK ] OIDC login redirects to Keycloak ($LRC)";; *) echo "  [FAIL] OIDC login not redirecting ($LRC)";; esac
 
 echo "── What YOU must do in the browser ────────────────────"
 echo "  1) hosts file (C:\\Windows\\System32\\drivers\\etc\\hosts on Windows):"

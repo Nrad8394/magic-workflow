@@ -68,6 +68,31 @@ loopback instead of the proxy). `.test` is also reserved for local use but is
 **not** loopback-pinned, so the proxy's network aliases resolve correctly inside
 the containers. Use a real domain in production.
 
+## "Could not reach the OpenID Connect provider" (or Office won't open)
+
+Two server-side causes, both handled by `make configure` (and `make up`):
+
+1. **SSRF protection** — Nextcloud blocks its HTTP client from reaching
+   private/local IPs. Our services resolve to the internal Docker network, so
+   the OIDC discovery and Collabora WOPI calls raise
+   `LocalServerException: ... violates local access rules`. Fix:
+   ```bash
+   make occ CMD="config:system:set allow_local_remote_servers --value=true --type=boolean"
+   ```
+2. **Self-signed cert** — Nextcloud's HTTP client verifies TLS using its own
+   bundle; import the edge cert:
+   ```bash
+   make occ CMD="security:certificates:import /magic-ca.pem"
+   ```
+
+Verify Nextcloud can actually reach Keycloak (should print `OK http=200`):
+```bash
+docker compose cp scripts/_oidc-test.php nextcloud-app:/tmp/t.php
+docker compose exec -u www-data nextcloud-app php /tmp/t.php
+```
+`make doctor` checks both settings and that the login endpoint returns a 30x
+redirect to Keycloak.
+
 ## App store unreachable / `app:install ... not found on the appstore`
 
 Some networks block `apps.nextcloud.com` (e.g. SNI-based filtering — the TLS
