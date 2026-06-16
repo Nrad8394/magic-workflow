@@ -36,7 +36,7 @@ fi
 
 # ── 2. derive hostnames from BASE_DOMAIN ─────────────────────────────────────
 BASE_DOMAIN="$(grep -E '^BASE_DOMAIN=' .env | cut -d= -f2- | tr -d '[:space:]')"
-BASE_DOMAIN="${BASE_DOMAIN:-magic.localhost}"
+BASE_DOMAIN="${BASE_DOMAIN:-magic.test}"
 set_host() { sed -i.bak "s|^$1=.*|$1=$2.${BASE_DOMAIN}|" .env && rm -f .env.bak; }
 set_host NEXTCLOUD_HOST     cloud
 set_host MATTERMOST_HOST    chat

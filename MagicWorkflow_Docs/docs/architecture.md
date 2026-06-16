@@ -65,6 +65,23 @@ heart of "all our data in one cloud" — see [Storage](storage.md).
 boot with OIDC clients for Nextcloud and Mattermost already created. See
 [Single sign-on](sso.md).
 
+## Automatic configuration (plug-and-play)
+
+Two mechanisms make the suite work end-to-end with no manual `occ`:
+
+- **App install hook** — `config/nextcloud/hooks/install-apps.sh` runs on every
+  Nextcloud start (a `before-starting` hook) and installs `user_oidc` +
+  `richdocuments` **from GitHub** (the app store may be blocked on some networks).
+- **`nextcloud-configure`** — a one-shot service that waits for Keycloak +
+  Collabora + Nextcloud to be healthy, then registers the Keycloak OIDC login
+  provider and points Nextcloud Office at Collabora. Idempotent; exits when done.
+
+!!! note "Local base domain = `magic.test`"
+    Not `.localhost` — `curl`/PHP pin `*.localhost` to loopback (RFC 6761), which
+    breaks server-side container-to-container calls. `.test` resolves via Docker
+    DNS + the proxy's network aliases. See
+    [Troubleshooting](troubleshooting.md#why-magictest-and-not-magiclocalhost).
+
 ## Profiles
 
 | Profile | Services | Start with |

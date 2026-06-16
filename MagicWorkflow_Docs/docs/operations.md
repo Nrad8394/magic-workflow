@@ -29,6 +29,38 @@ make logs-nextcloud   # watch the Nextcloud upgrade
 `com.centurylinklabs.watchtower.enable=true`). It's off by label by default —
 review before enabling auto-update for stateful services in production.
 
+## Required Nextcloud apps
+
+Two Nextcloud apps are needed for the suite's features:
+
+| App | Purpose |
+|-----|---------|
+| `user_oidc` | Keycloak single sign-on |
+| `richdocuments` | Nextcloud Office (Collabora editing) |
+
+These are **installed automatically** on Nextcloud start by a hook
+(`config/nextcloud/hooks/install-apps.sh`) that pulls the release tarballs
+**from GitHub** — because the Nextcloud app store (`apps.nextcloud.com`) is
+unreachable on some networks (e.g. SNI-based filtering). Re-run any time:
+
+```bash
+make nc-apps        # idempotent: (re)install user_oidc + richdocuments
+```
+
+!!! note "Version pinning"
+    The hook pins versions for **Nextcloud 32** (`user_oidc` v8.10.1,
+    `richdocuments` v9.1.0). When you upgrade Nextcloud, bump them in the hook
+    (rule of thumb: `richdocuments` major = NC major − 23, e.g. NC 34 → v11).
+    If your network can reach the app store, `make occ CMD="app:update --all"`
+    works too.
+
+Then wire them up (idempotent, one command each):
+
+```bash
+make sso-connect      # register Keycloak as a Nextcloud login provider
+make office-connect   # point Nextcloud Office at Collabora
+```
+
 ## Nextcloud admin
 
 ```bash

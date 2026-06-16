@@ -24,17 +24,27 @@ Manage users at **https://id.<domain>** with the `KEYCLOAK_ADMIN` login from
 
 ## Connect Nextcloud
 
+The `user_oidc` app is **installed automatically** when Nextcloud starts (from
+GitHub — see [Required apps](operations.md#required-nextcloud-apps)). Then one
+command registers the provider:
+
 ```bash
-make occ CMD="app:install user_oidc"
-make occ CMD="user_oidc:provider Keycloak \
-  --clientid=nextcloud \
-  --clientsecret=<OIDC_NEXTCLOUD_SECRET from .env> \
-  --discoveryuri=https://id.<domain>/realms/magicworkflow/.well-known/openid-configuration \
-  --mapping-uid=preferred_username --mapping-email=email --mapping-displayName=name"
+make sso-connect
 ```
 
-The Nextcloud login page now offers **Log in with Keycloak**. (Keep the local
-admin account as a break-glass login.)
+That's idempotent — it installs `user_oidc` if missing and registers the
+`Keycloak` provider using the secret from `.env`. The Nextcloud login page then
+offers **Log in with Keycloak**. (Keep the local admin account as a break-glass
+login.)
+
+??? note "Manual equivalent"
+    ```bash
+    make occ CMD="user_oidc:provider Keycloak \
+      --clientid=nextcloud \
+      --clientsecret=<OIDC_NEXTCLOUD_SECRET from .env> \
+      --discoveryuri=https://id.<domain>/realms/magicworkflow/.well-known/openid-configuration \
+      --mapping-uid=preferred_username --mapping-email=email --mapping-displayName=name"
+    ```
 
 ## Connect Mattermost
 

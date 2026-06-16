@@ -58,19 +58,49 @@ The image has no `curl`/`wget`; the healthcheck uses a bash `/dev/tcp` probe.
 The systemplate "read-only" warnings in its log are performance notes, not
 errors.
 
-## "office.<domain> just shows OK / isn't an app"
+## Why `magic.test` and not `magic.localhost`?
 
-That's expected — Collabora is a **backend**, not a page you browse. You edit
-documents **inside Nextcloud**. Connect them once:
+The local default base domain is **`magic.test`**, not `.localhost`, on purpose.
+`curl` and PHP's HTTP client hardcode any `*.localhost` name to the loopback
+address (RFC 6761), ignoring Docker's DNS. That breaks **server-side** calls
+between containers (Nextcloud → Collabora/Keycloak resolve to the container's own
+loopback instead of the proxy). `.test` is also reserved for local use but is
+**not** loopback-pinned, so the proxy's network aliases resolve correctly inside
+the containers. Use a real domain in production.
+
+## App store unreachable / `app:install ... not found on the appstore`
+
+Some networks block `apps.nextcloud.com` (e.g. SNI-based filtering — the TLS
+connection is reset even though general internet works). That breaks
+`occ app:install` for **every** app.
+
+This suite works around it: the required apps (`user_oidc`, `richdocuments`) are
+installed **from GitHub** automatically on Nextcloud start, and via:
 
 ```bash
-make office-connect      # installs the Nextcloud Office app + points it at Collabora
+make nc-apps          # (re)install user_oidc + richdocuments from GitHub
 ```
 
-This needs the Nextcloud container to reach `apps.nextcloud.com` **once** to
-download the app (`make office-connect` prints a clear message if it can't —
-fix container egress/DNS, or install "Nextcloud Office" from the Apps UI). The
-edge proxy is given internal network aliases so Nextcloud ↔ Collabora resolve
+GitHub must be reachable from the Nextcloud container (it usually is even when
+the app store isn't). To confirm the block is SNI-based:
+
+```bash
+# connects, then TLS resets -> middlebox filtering that hostname
+echo | openssl s_client -connect apps.nextcloud.com:443 -servername apps.nextcloud.com
+```
+
+Workarounds for full app-store access: a VPN, or a different network.
+
+## "office.<domain> just shows OK / isn't an app"
+
+Expected — Collabora is a **backend**, not a page you browse. You edit documents
+**inside Nextcloud**. `richdocuments` auto-installs on start; then connect it:
+
+```bash
+make office-connect      # points Nextcloud Office at Collabora
+```
+
+The edge proxy has internal network aliases so Nextcloud ↔ Collabora resolve
 each other's hostnames on a single host. The admin console (basic-auth with
 `COLLABORA_USERNAME`/`PASSWORD`) is at `…/browser/dist/admin/admin.html`.
 

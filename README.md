@@ -45,8 +45,8 @@ make setup        # .env + strong random secrets + Keycloak realm + self-signed 
 Add the printed line to your hosts file so the subdomains resolve locally:
 
 ```
-127.0.0.1  cloud.magic.localhost chat.magic.localhost office.magic.localhost \
-           id.magic.localhost grafana.magic.localhost dash.magic.localhost s3.magic.localhost
+127.0.0.1  cloud.magic.test chat.magic.test office.magic.test \
+           id.magic.test grafana.magic.test dash.magic.test s3.magic.test
 ```
 
 Then:
@@ -57,7 +57,7 @@ make urls         # print every URL + admin login
 make health       # probe each service
 ```
 
-Open the dashboard at **https://dash.magic.localhost** (accept the self-signed
+Open the dashboard at **https://dash.magic.test** (accept the self-signed
 cert warning). First boot pulls images + installs — give it a few minutes;
 watch with `make logs`.
 
@@ -84,13 +84,27 @@ See [`MagicWorkflow_Docs`](MagicWorkflow_Docs/) → **Install on a server**,
 
 ---
 
+## Plug-and-play
+
+`make setup && make up` is all it takes. On startup the suite automatically:
+
+- creates all databases, buckets and the Keycloak realm,
+- **installs the required Nextcloud apps from GitHub** (`user_oidc`,
+  `richdocuments`) — no app store needed (it may be blocked on some networks),
+- **wires Nextcloud SSO (Keycloak) and Office (Collabora)** via the one-shot
+  `nextcloud-configure` service.
+
+No manual `occ` steps. (Re-run any piece with `make nc-apps`, `make sso-connect`,
+`make office-connect` if needed.)
+
 ## Single sign-on
 
 Keycloak ships pre-loaded with a realm + OIDC clients for Nextcloud and
-Mattermost. After the stack is up:
+Mattermost. **Nextcloud SSO is wired automatically.** For Mattermost (System
+Console step), print the details:
 
 ```bash
-make sso-info     # prints the exact occ / System Console steps + secrets
+make sso-info     # endpoints + secrets + the Mattermost System Console step
 ```
 
 ---

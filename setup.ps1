@@ -34,7 +34,7 @@ if (-not (Test-Path .env)) {
 
 # Derive hostnames from BASE_DOMAIN
 $base = ((Select-String -Path .env -Pattern '^BASE_DOMAIN=' | Select-Object -First 1).Line -split '=',2)[1].Trim()
-if (-not $base) { $base = 'magic.localhost' }
+if (-not $base) { $base = 'magic.test' }
 $content = Get-Content .env -Raw
 $map = @{ 'NEXTCLOUD_HOST'='cloud'; 'MATTERMOST_HOST'='chat'; 'COLLABORA_HOST'='office';
           'KEYCLOAK_HOST'='id'; 'GRAFANA_HOST'='grafana'; 'HOMER_HOST'='dash'; 'MINIO_CONSOLE_HOST'='s3' }

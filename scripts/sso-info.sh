@@ -18,13 +18,17 @@ cat <<EOF
   Pre-created clients: nextcloud, mattermost  (secrets in .env)
 
   ── Nextcloud ────────────────────────────────────────────────────────────────
-  1. make occ CMD="app:install user_oidc"
-  2. make occ CMD="user_oidc:provider Keycloak \\
+  Easiest — one command (auto-installs user_oidc + registers the provider):
+
+      make sso-connect
+
+  Or manually (the user_oidc app auto-installs on start / via 'make nc-apps'):
+      make occ CMD="user_oidc:provider Keycloak \\
        --clientid=nextcloud \\
        --clientsecret=$(get OIDC_NEXTCLOUD_SECRET) \\
        --discoveryuri=$ISS/.well-known/openid-configuration \\
-       --mapping-uid=preferred_username --mapping-email=email --mapping-displayName=name"
-  3. Login page now shows 'Log in with Keycloak'.
+       --mapping-uid=preferred_username --mapping-email=email --mapping-display-name=name"
+  Login page then shows 'Log in with Keycloak'.
 
   ── Mattermost ───────────────────────────────────────────────────────────────
   System Console -> Authentication -> OpenID Connect:

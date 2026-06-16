@@ -16,7 +16,7 @@ make setup
 ```
 
 This creates `.env` with **strong random secrets**, derives all hostnames from
-`BASE_DOMAIN` (default `magic.localhost`), renders the Keycloak realm, and
+`BASE_DOMAIN` (default `magic.test`), renders the Keycloak realm, and
 generates a self-signed wildcard TLS certificate.
 
 ## 3. Hosts file
@@ -27,7 +27,7 @@ add it to your hosts file:
 === "Linux / macOS / WSL"
     `/etc/hosts`:
     ```
-    127.0.0.1  cloud.magic.localhost chat.magic.localhost office.magic.localhost id.magic.localhost grafana.magic.localhost dash.magic.localhost s3.magic.localhost
+    127.0.0.1  cloud.magic.test chat.magic.test office.magic.test id.magic.test grafana.magic.test dash.magic.test s3.magic.test
     ```
 
 === "Windows"
@@ -56,20 +56,36 @@ make health       # per-service probe
 make urls         # prints every URL + admin login
 ```
 
-- Dashboard: **https://dash.magic.localhost**
-- Nextcloud: **https://cloud.magic.localhost**
-- Mattermost: **https://chat.magic.localhost** (first account becomes admin)
-- Keycloak: **https://id.magic.localhost**
+- Dashboard: **https://dash.magic.test**
+- Nextcloud: **https://cloud.magic.test**
+- Mattermost: **https://chat.magic.test** (first account becomes admin)
+- Keycloak: **https://id.magic.test**
 
 !!! warning "Self-signed certificate"
     Your browser will warn about the local cert — that's expected. Accept it to
     continue. Production uses real certificates (see
     [Install on a server](install-server.md)).
 
-## 6. Wire single sign-on (optional but recommended)
+## 6. SSO + Office are already wired
+
+Nothing to do — on `make up` the suite auto-installs the required Nextcloud apps
+(`user_oidc`, `richdocuments`) from GitHub and the one-shot
+`nextcloud-configure` service registers Keycloak SSO and connects Nextcloud
+Office to Collabora. Log in to Nextcloud and you'll see **Log in with Keycloak**;
+open a document to edit it with Collabora.
+
+Re-run any piece manually if needed:
 
 ```bash
-make sso-info     # prints the exact steps + secrets
+make nc-apps         # reinstall user_oidc + richdocuments from GitHub
+make sso-connect     # re-register Keycloak login in Nextcloud
+make office-connect  # re-point Nextcloud Office at Collabora
+```
+
+For **Mattermost** SSO (a System Console step), see:
+
+```bash
+make sso-info        # endpoints + secrets + the Mattermost steps
 ```
 
 ## 7. Tear down

@@ -60,16 +60,16 @@ services:
       internal:
         # Let internal containers resolve the public hostnames to the proxy, so
         # Nextcloud <-> Collabora (WOPI) work server-side on one host. These are
-        # the default magic.localhost names; if you change BASE_DOMAIN, update
+        # the default magic.test names; if you change BASE_DOMAIN, update
         # them to match (or rely on DNS that resolves internally).
         aliases:
-          - cloud.magic.localhost
-          - chat.magic.localhost
-          - office.magic.localhost
-          - id.magic.localhost
-          - s3.magic.localhost
-          - grafana.magic.localhost
-          - dash.magic.localhost
+          - cloud.magic.test
+          - chat.magic.test
+          - office.magic.test
+          - id.magic.test
+          - s3.magic.test
+          - grafana.magic.test
+          - dash.magic.test
 
   # ──────────────────────────── SHARED BACKENDS ──────────────────────────────
   db:
@@ -205,6 +205,8 @@ services:
     volumes:
       - nextcloud_app:/var/www/html
       - ./config/nextcloud/php/zz-custom.ini:/usr/local/etc/php/conf.d/zz-custom.ini:ro
+      # Auto-install required apps from GitHub on start (app store may be blocked).
+      - ./config/nextcloud/hooks/install-apps.sh:/docker-entrypoint-hooks.d/before-starting/install-apps.sh:ro
     environment:
       TZ: ${TZ}
       POSTGRES_HOST: db
@@ -265,6 +267,29 @@ services:
     entrypoint: /cron.sh
     environment:
       TZ: ${TZ}
+    networks: [internal]
+
+  # One-shot: wires Nextcloud SSO (Keycloak) + Office (Collabora) once the
+  # dependencies are healthy. Runs on every `make up`; idempotent; then exits.
+  nextcloud-configure:
+    image: nextcloud:${NEXTCLOUD_IMAGE_TAG}
+    depends_on:
+      nextcloud-app:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      collabora:
+        condition: service_healthy
+    volumes:
+      - nextcloud_app:/var/www/html
+      - ./config/nextcloud/hooks/configure.sh:/configure.sh:ro
+    entrypoint: ["/bin/sh", "/configure.sh"]
+    environment:
+      OIDC_NEXTCLOUD_SECRET: ${OIDC_NEXTCLOUD_SECRET}
+      KEYCLOAK_HOST: ${KEYCLOAK_HOST}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      COLLABORA_HOST: ${COLLABORA_HOST}
+    restart: "no"
     networks: [internal]
 
   # ──────────────────────────────── MATTERMOST ───────────────────────────────

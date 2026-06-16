@@ -109,9 +109,17 @@ nc-fix:                ## Apply Nextcloud recommended DB indices etc. (after fir
 	$(OCC) db:add-missing-columns
 	$(OCC) maintenance:repair --include-expensive
 
+.PHONY: nc-apps
+nc-apps:               ## (Re)install required Nextcloud apps from GitHub (user_oidc, richdocuments)
+	$(COMPOSE) exec -u root nextcloud-app sh /docker-entrypoint-hooks.d/before-starting/install-apps.sh
+
 .PHONY: office-connect
-office-connect:        ## Install Nextcloud Office + point it at Collabora (needs internet once)
+office-connect:        ## Point Nextcloud Office at Collabora (auto-installs richdocuments if needed)
 	@bash scripts/office-connect.sh
+
+.PHONY: sso-connect
+sso-connect:           ## Register Keycloak as an OIDC login provider in Nextcloud
+	@bash scripts/sso-connect.sh
 
 .PHONY: mmctl
 mmctl:                 ## Run a Mattermost mmctl command: make mmctl CMD="user list"
