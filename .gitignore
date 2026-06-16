@@ -1,0 +1,23 @@
+# Secrets & local state
+.env
+*.env.local
+
+# Generated TLS material
+config/proxy/tls/*.pem
+
+# Generated Keycloak realm (rendered from scripts/keycloak-realm.json.template)
+config/keycloak/*.json
+
+# Backups
+backups/
+
+# Docs build
+MagicWorkflow_Docs/site/
+MagicWorkflow_Docs/.venv/
+__pycache__/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,14 @@
+# Homer dashboard vhost (landing page linking every service).
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${HOMER_HOST};
+
+    ssl_certificate     /etc/nginx/tls/fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/privkey.pem;
+
+    location / {
+        set $upstream http://homer:8080;
+        proxy_pass $upstream;
+    }
+}

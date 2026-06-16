@@ -1,0 +1,22 @@
+# MinIO console vhost (object-storage admin UI).
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${MINIO_CONSOLE_HOST};
+
+    ssl_certificate     /etc/nginx/tls/fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/privkey.pem;
+
+    # Large object uploads via the console
+    client_max_body_size 0;
+    ignore_invalid_headers off;
+
+    location / {
+        set $upstream http://minio:9001;
+        proxy_pass $upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        chunked_transfer_encoding off;
+    }
+}

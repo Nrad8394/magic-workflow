@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # Mattermost performance metrics (Enterprise; enable MM_METRICSSETTINGS_ENABLE).
+  - job_name: mattermost
+    static_configs:
+      - targets: ["mattermost:8067"]
+
+  # MinIO cluster metrics (public bucket-less metrics endpoint).
+  - job_name: minio
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["minio:9000"]

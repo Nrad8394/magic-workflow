@@ -1,0 +1,349 @@
+# =============================================================================
+# Magic Workflow — unified self-hosted collaboration suite
+#
+#   Edge nginx (TLS) ─ routes by hostname ─▶ Nextcloud · Mattermost · Collabora
+#                                            Keycloak (SSO) · Grafana · Homer · MinIO
+#   Shared backends: PostgreSQL (multi-db) · Redis · MinIO (S3)
+#
+# Profiles:
+#   (default / core)  proxy, db, redis, minio, keycloak, nextcloud, mattermost, collabora, homer
+#   monitoring        prometheus, grafana, loki, promtail, node-exporter
+#   ops               watchtower, backup
+#
+#   make up                 # core
+#   make up-full            # core + monitoring + ops
+#
+# All tunables live in .env (copy from .env.example or run `make setup`).
+# =============================================================================
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ───────────────────────────── EDGE PROXY ──────────────────────────────────
+  proxy:
+    image: nginx:${NGINX_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      nextcloud-web:
+        condition: service_started
+      mattermost:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    ports:
+      - ${HTTP_PORT}:80
+      - ${HTTPS_PORT}:443
+    volumes:
+      - ./config/proxy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/proxy/templates:/etc/nginx/templates:ro
+      - ./config/proxy/tls:/etc/nginx/tls:ro
+    environment:
+      TZ: ${TZ}
+      # The official nginx entrypoint runs envsubst on /etc/nginx/templates/*.template.
+      # Restrict substitution to our *_HOST vars so nginx's own $host/$scheme survive.
+      NGINX_ENVSUBST_FILTER: "_HOST$$"
+      NEXTCLOUD_HOST: ${NEXTCLOUD_HOST}
+      MATTERMOST_HOST: ${MATTERMOST_HOST}
+      COLLABORA_HOST: ${COLLABORA_HOST}
+      KEYCLOAK_HOST: ${KEYCLOAK_HOST}
+      GRAFANA_HOST: ${GRAFANA_HOST}
+      HOMER_HOST: ${HOMER_HOST}
+      MINIO_CONSOLE_HOST: ${MINIO_CONSOLE_HOST}
+    networks: [edge, internal]
+
+  # ──────────────────────────── SHARED BACKENDS ──────────────────────────────
+  db:
+    image: postgres:${POSTGRES_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./config/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    environment:
+      TZ: ${TZ}
+      POSTGRES_USER: ${POSTGRES_SUPER_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPER_PASSWORD}
+      POSTGRES_DB: postgres
+      NEXTCLOUD_DB_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      MATTERMOST_DB_PASSWORD: ${MATTERMOST_DB_PASSWORD}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPER_USER} -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [internal]
+
+  redis:
+    image: redis:${REDIS_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  minio:
+    image: minio/minio:${MINIO_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      TZ: ${TZ}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BROWSER_REDIRECT_URL: https://${MINIO_CONSOLE_HOST}
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks: [internal]
+
+  # One-shot: create buckets + an app service-account scoped to them.
+  minio-init:
+    image: minio/mc:${MC_IMAGE_TAG}
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/init/minio-init.sh"]
+    volumes:
+      - ./scripts/minio-init.sh:/init/minio-init.sh:ro
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      NEXTCLOUD_S3_BUCKET: ${NEXTCLOUD_S3_BUCKET}
+      MATTERMOST_S3_BUCKET: ${MATTERMOST_S3_BUCKET}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+    networks: [internal]
+    restart: "no"
+
+  # ───────────────────────────────── SSO ─────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      db:
+        condition: service_healthy
+    # `start` (not start-dev) is production mode; it auto-builds on first run.
+    # (Avoid --optimized unless you bake a `kc.sh build` into a custom image.)
+    command: ["start", "--import-realm"]
+    volumes:
+      - ./config/keycloak:/opt/keycloak/data/import:ro
+    environment:
+      TZ: ${TZ}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_HOSTNAME: https://${KEYCLOAK_HOST}
+      KC_HOSTNAME_ADMIN: https://${KEYCLOAK_HOST}
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Substituted into the imported realm
+      OIDC_NEXTCLOUD_SECRET: ${OIDC_NEXTCLOUD_SECRET}
+      OIDC_MATTERMOST_SECRET: ${OIDC_MATTERMOST_SECRET}
+      NEXTCLOUD_HOST: ${NEXTCLOUD_HOST}
+      MATTERMOST_HOST: ${MATTERMOST_HOST}
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    networks: [internal]
+
+  # ──────────────────────────────── NEXTCLOUD ────────────────────────────────
+  nextcloud-app:
+    image: nextcloud:${NEXTCLOUD_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    volumes:
+      - nextcloud_app:/var/www/html
+      - ./config/nextcloud/php/zz-custom.ini:/usr/local/etc/php/conf.d/zz-custom.ini:ro
+    environment:
+      TZ: ${TZ}
+      POSTGRES_HOST: db
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_HOST_PASSWORD: ${REDIS_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_HOST} nextcloud-web localhost
+      OVERWRITEPROTOCOL: https
+      OVERWRITEHOST: ${NEXTCLOUD_HOST}
+      OVERWRITECLIURL: https://${NEXTCLOUD_HOST}
+      TRUSTED_PROXIES: 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT}
+      PHP_UPLOAD_LIMIT: ${PHP_UPLOAD_LIMIT}
+      # S3 primary storage (shared MinIO)
+      OBJECTSTORE_S3_BUCKET: ${NEXTCLOUD_S3_BUCKET}
+      OBJECTSTORE_S3_HOST: minio
+      OBJECTSTORE_S3_PORT: 9000
+      OBJECTSTORE_S3_SSL: "false"
+      OBJECTSTORE_S3_USEPATH_STYLE: "true"
+      OBJECTSTORE_S3_KEY: ${S3_ACCESS_KEY}
+      OBJECTSTORE_S3_SECRET: ${S3_SECRET_KEY}
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/localhost/9000' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    networks: [internal]
+
+  nextcloud-web:
+    image: nginx:${NGINX_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      nextcloud-app:
+        condition: service_started
+    volumes:
+      - nextcloud_app:/var/www/html:ro
+      - ./config/nextcloud/nginx.conf:/etc/nginx/nginx.conf:ro
+    environment:
+      TZ: ${TZ}
+    networks: [internal]
+
+  nextcloud-cron:
+    image: nextcloud:${NEXTCLOUD_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      nextcloud-app:
+        condition: service_started
+    volumes:
+      - nextcloud_app:/var/www/html
+    entrypoint: /cron.sh
+    environment:
+      TZ: ${TZ}
+    networks: [internal]
+
+  # ──────────────────────────────── MATTERMOST ───────────────────────────────
+  mattermost:
+    image: mattermost/${MATTERMOST_IMAGE}:${MATTERMOST_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      db:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    volumes:
+      - mattermost_config:/mattermost/config:rw
+      - mattermost_data:/mattermost/data:rw
+      - mattermost_logs:/mattermost/logs:rw
+      - mattermost_plugins:/mattermost/plugins:rw
+      - mattermost_client_plugins:/mattermost/client/plugins:rw
+      - mattermost_bleve:/mattermost/bleve-indexes:rw
+    environment:
+      TZ: ${TZ}
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mattermost:${MATTERMOST_DB_PASSWORD}@db:5432/mattermost?sslmode=disable&connect_timeout=10
+      MM_BLEVESETTINGS_INDEXDIR: /mattermost/bleve-indexes
+      MM_SERVICESETTINGS_SITEURL: https://${MATTERMOST_HOST}
+      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+      # S3 file store (shared MinIO)
+      MM_FILESETTINGS_DRIVERNAME: amazons3
+      MM_FILESETTINGS_AMAZONS3BUCKET: ${MATTERMOST_S3_BUCKET}
+      MM_FILESETTINGS_AMAZONS3ENDPOINT: minio:9000
+      MM_FILESETTINGS_AMAZONS3ACCESSKEYID: ${S3_ACCESS_KEY}
+      MM_FILESETTINGS_AMAZONS3SECRETACCESSKEY: ${S3_SECRET_KEY}
+      MM_FILESETTINGS_AMAZONS3SSL: "false"
+      MM_FILESETTINGS_AMAZONS3PATHPREFIX: ""
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8065/api/v4/system/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks: [internal]
+
+  # ──────────────────────────────── COLLABORA ────────────────────────────────
+  collabora:
+    image: collabora/code:${COLLABORA_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    cap_add: [MKNOD]
+    depends_on:
+      nextcloud-web:
+        condition: service_started
+    environment:
+      TZ: ${TZ}
+      aliasgroup1: https://${NEXTCLOUD_HOST}:443
+      username: ${COLLABORA_USERNAME}
+      password: ${COLLABORA_PASSWORD}
+      extra_params: --o:ssl.enable=false --o:ssl.termination=true
+    healthcheck:
+      # The collabora image has no curl/wget; bash + /dev/tcp is available.
+      test: ["CMD-SHELL", "bash -c '(exec 3<>/dev/tcp/127.0.0.1/9980)' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks: [internal]
+
+  # ──────────────────────────────── DASHBOARD ────────────────────────────────
+  homer:
+    image: b4bz/homer:${HOMER_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    volumes:
+      - ./config/homer:/www/assets:ro
+    environment:
+      TZ: ${TZ}
+      INIT_ASSETS: "0"
+    networks: [internal]
+
+volumes:
+  db_data:
+  redis_data:
+  minio_data:
+  nextcloud_app:
+  mattermost_config:
+  mattermost_data:
+  mattermost_logs:
+  mattermost_plugins:
+  mattermost_client_plugins:
+  mattermost_bleve:
+
+networks:
+  edge:
+    driver: bridge
+  internal:
+    driver: bridge

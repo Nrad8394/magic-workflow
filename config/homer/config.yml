@@ -1,0 +1,52 @@
+# Homer dashboard — the landing page linking every Magic Workflow service.
+# Hosts are placeholders for the magic.localhost defaults; edit for your domain.
+title: "Magic Workflow"
+subtitle: "Self-hosted collaboration suite"
+logo: false
+header: true
+footer: '<p>Magic Workflow — your organisation''s private cloud</p>'
+
+colors:
+  light:
+    primary: "#3367d6"
+    background: "#f5f7fa"
+  dark:
+    primary: "#5b8def"
+    background: "#0f172a"
+
+links: []
+
+services:
+  - name: "Collaboration"
+    icon: "fas fa-cloud"
+    items:
+      - name: "Nextcloud"
+        subtitle: "Files, calendar, contacts, office"
+        tag: "files"
+        url: "https://cloud.magic.localhost"
+        target: "_blank"
+      - name: "Mattermost"
+        subtitle: "Team chat, calls, playbooks"
+        tag: "chat"
+        url: "https://chat.magic.localhost"
+        target: "_blank"
+      - name: "Collabora Office"
+        subtitle: "Online document editing"
+        tag: "office"
+        url: "https://office.magic.localhost"
+        target: "_blank"
+  - name: "Platform"
+    icon: "fas fa-cogs"
+    items:
+      - name: "Keycloak (SSO)"
+        subtitle: "Single sign-on / identity"
+        url: "https://id.magic.localhost"
+        target: "_blank"
+      - name: "MinIO Console"
+        subtitle: "Object storage"
+        url: "https://s3.magic.localhost"
+        target: "_blank"
+      - name: "Grafana"
+        subtitle: "Monitoring & dashboards"
+        url: "https://grafana.magic.localhost"
+        target: "_blank"

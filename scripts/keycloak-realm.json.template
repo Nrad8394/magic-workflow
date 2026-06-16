@@ -1,0 +1,65 @@
+{
+  "realm": "${KEYCLOAK_REALM}",
+  "enabled": true,
+  "displayName": "Magic Workflow",
+  "loginTheme": "keycloak",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "sslRequired": "external",
+  "roles": {
+    "realm": [
+      { "name": "user", "description": "Standard Magic Workflow user" },
+      { "name": "admin", "description": "Magic Workflow administrator" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "nextcloud",
+      "name": "Nextcloud",
+      "protocol": "openid-connect",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "secret": "${OIDC_NEXTCLOUD_SECRET}",
+      "redirectUris": [
+        "https://${NEXTCLOUD_HOST}/apps/user_oidc/code",
+        "https://${NEXTCLOUD_HOST}/*"
+      ],
+      "webOrigins": [ "https://${NEXTCLOUD_HOST}" ],
+      "defaultClientScopes": [ "openid", "profile", "email", "roles" ],
+      "attributes": { "post.logout.redirect.uris": "https://${NEXTCLOUD_HOST}/*" }
+    },
+    {
+      "clientId": "mattermost",
+      "name": "Mattermost",
+      "protocol": "openid-connect",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "secret": "${OIDC_MATTERMOST_SECRET}",
+      "redirectUris": [
+        "https://${MATTERMOST_HOST}/signup/openid/complete",
+        "https://${MATTERMOST_HOST}/login/sso/openid",
+        "https://${MATTERMOST_HOST}/*"
+      ],
+      "webOrigins": [ "https://${MATTERMOST_HOST}" ],
+      "defaultClientScopes": [ "openid", "profile", "email", "roles" ],
+      "attributes": { "post.logout.redirect.uris": "https://${MATTERMOST_HOST}/*" }
+    }
+  ],
+  "users": [
+    {
+      "username": "demo",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "demo@${KEYCLOAK_REALM}.local",
+      "firstName": "Demo",
+      "lastName": "User",
+      "credentials": [ { "type": "password", "value": "demo", "temporary": true } ],
+      "realmRoles": [ "user" ]
+    }
+  ]
+}

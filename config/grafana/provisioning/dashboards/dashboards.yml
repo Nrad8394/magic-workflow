@@ -1,0 +1,12 @@
+apiVersion: 1
+
+# Drop dashboard JSON files into ./config/grafana/dashboards to auto-load them.
+providers:
+  - name: Magic Workflow
+    orgId: 1
+    folder: Magic Workflow
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
