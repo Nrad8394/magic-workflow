@@ -101,11 +101,13 @@ services:
     restart: unless-stopped
     logging: *default-logging
     security_opt: [no-new-privileges:true]
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    # No password: Redis is on the internal-only network, never published to the
+    # host. (A password env-mismatch silently breaks Nextcloud's cache + locking.)
+    command: ["redis-server", "--save", "60", "1"]
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -220,7 +222,6 @@ services:
       POSTGRES_USER: nextcloud
       POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
       REDIS_HOST: redis
-      REDIS_HOST_PASSWORD: ${REDIS_PASSWORD}
       NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
       NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
       NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_HOST} nextcloud-web localhost

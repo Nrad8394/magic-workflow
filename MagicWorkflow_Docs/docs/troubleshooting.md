@@ -116,6 +116,20 @@ echo | openssl s_client -connect apps.nextcloud.com:443 -servername apps.nextclo
 
 Workarounds for full app-store access: a VPN, or a different network.
 
+## Clicking a document downloads instead of opening in the editor
+
+The server side is fine if `make doctor` is green and
+`occ richdocuments:activate-config` reports "✓ Detected WOPI server". The
+download fallback is **browser-side**:
+
+1. **Hard-refresh** the Files page (`Ctrl+Shift+R`). The "Edit in Nextcloud
+   Office" file action registers from app state at page load — if the page was
+   open before Office was connected, it still shows Download.
+2. The editor loads `office.<domain>` in an iframe — your browser must be able to
+   reach it. Open **https://office.<domain>/** directly once; it must show `OK`
+   with a **trusted padlock** (hosts-file entry + `make trust-cert`). A cert
+   warning there means the iframe is blocked.
+
 ## "office.<domain> just shows OK / isn't an app"
 
 Expected — Collabora is a **backend**, not a page you browse. You edit documents
