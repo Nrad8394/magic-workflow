@@ -13,9 +13,13 @@ WWW=/var/www/html
 occ() { su -s /bin/sh -c "php $WWW/occ $*" www-data; }
 
 # Trust the edge proxy cert so OIDC discovery / WOPI server-side calls verify.
+# Two stores matter: the system CA (for some libs) AND Nextcloud's OWN bundle
+# (Nextcloud's HTTP client uses its bundled ca-bundle, not the system one).
 if [ -f /magic-ca.pem ]; then
   cp /magic-ca.pem /usr/local/share/ca-certificates/magic-workflow.crt 2>/dev/null \
     && update-ca-certificates >/dev/null 2>&1 || true
+  echo "[configure] importing edge cert into Nextcloud trust store"
+  occ security:certificates:import /magic-ca.pem >/dev/null 2>&1 || true
 fi
 
 echo "[configure] ensuring required apps are enabled"
