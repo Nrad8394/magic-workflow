@@ -28,6 +28,27 @@ wait_healthy nextcloud-app
 wait_healthy keycloak
 wait_healthy collabora
 
+# 0. Force Keycloak's client secrets to match .env. Keycloak only imports the
+#    realm once, so an older secret can get stuck in its DB while the apps use
+#    the current .env value -> "Invalid client credentials" at token exchange.
+KC="docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh"
+REALM="$(get KEYCLOAK_REALM)"
+if $KC config credentials --server http://localhost:8080 --realm master \
+     --user "$(get KEYCLOAK_ADMIN)" --password "$(get KEYCLOAK_ADMIN_PASSWORD)" >/dev/null 2>&1; then
+  sync_secret() { # clientId  secret
+    local cid
+    cid=$($KC get clients -r "$REALM" -q "clientId=$1" --fields id 2>/dev/null | grep -oiE '[0-9a-f]{8}-[0-9a-f-]{27}' | head -1)
+    if [ -n "$cid" ]; then
+      $KC update "clients/$cid" -r "$REALM" -s "secret=$2" >/dev/null 2>&1 \
+        && echo "   [ok] synced Keycloak '$1' client secret to .env"
+    fi
+  }
+  sync_secret nextcloud  "$(get OIDC_NEXTCLOUD_SECRET)"
+  sync_secret mattermost "$(get OIDC_MATTERMOST_SECRET)"
+else
+  echo "   [!!] kcadm auth failed — client secrets not synced"
+fi
+
 # 1a. Allow Nextcloud's HTTP client to reach our services on the internal Docker
 #     network (private IPs). Without this, SSRF protection raises
 #     LocalServerException and OIDC discovery + Collabora WOPI both fail.
@@ -40,19 +61,16 @@ $OCC security:certificates:import /magic-ca.pem >/dev/null 2>&1 \
   && echo "   [ok] edge cert trusted by Nextcloud" \
   || echo "   [!!] cert import failed"
 
-# 2. Keycloak OIDC login provider (idempotent).
-if $OCC user_oidc:provider 2>/dev/null | grep -q Keycloak; then
-  echo "   [ok] OIDC provider already registered"
+# 2. Keycloak OIDC login provider — upsert every run so the stored client secret
+#    always matches .env (the `Keycloak` identifier makes this idempotent).
+if $OCC user_oidc:provider Keycloak \
+     --clientid=nextcloud \
+     --clientsecret="$(get OIDC_NEXTCLOUD_SECRET)" \
+     --discoveryuri="https://$(get KEYCLOAK_HOST)/realms/$(get KEYCLOAK_REALM)/.well-known/openid-configuration" \
+     --mapping-uid=preferred_username --mapping-email=email --mapping-display-name=name >/dev/null 2>&1; then
+  echo "   [ok] Keycloak OIDC provider configured"
 else
-  if $OCC user_oidc:provider Keycloak \
-       --clientid=nextcloud \
-       --clientsecret="$(get OIDC_NEXTCLOUD_SECRET)" \
-       --discoveryuri="https://$(get KEYCLOAK_HOST)/realms/$(get KEYCLOAK_REALM)/.well-known/openid-configuration" \
-       --mapping-uid=preferred_username --mapping-email=email --mapping-display-name=name >/dev/null 2>&1; then
-    echo "   [ok] registered Keycloak OIDC provider"
-  else
-    echo "   [!!] OIDC provider registration failed (re-run 'make configure')"
-  fi
+  echo "   [!!] OIDC provider registration failed (re-run 'make configure')"
 fi
 
 # 3. Nextcloud Office -> Collabora.
