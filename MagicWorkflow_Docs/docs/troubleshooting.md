@@ -116,6 +116,15 @@ echo | openssl s_client -connect apps.nextcloud.com:443 -servername apps.nextclo
 
 Workarounds for full app-store access: a VPN, or a different network.
 
+## Apps/Office don't load — `Failed to load module script ... MIME type "application/octet-stream"`
+
+The browser console shows this for `*.mjs` files. nginx's bundled `mime.types`
+doesn't map `.mjs`, so ES modules are served as `application/octet-stream` and
+browsers refuse them — breaking the Files app, Viewer and Nextcloud Office (you
+get download fallback). Fixed in `config/nextcloud/nginx.conf` with a dedicated
+`location ~ \.mjs$ { types { application/javascript mjs; } ... }`. If you see it,
+ensure that block is present and `docker compose up -d --force-recreate nextcloud-web`.
+
 ## Clicking a document downloads instead of opening in the editor
 
 The server side is fine if `make doctor` is green and
