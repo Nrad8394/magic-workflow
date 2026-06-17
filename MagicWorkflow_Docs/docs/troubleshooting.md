@@ -116,6 +116,15 @@ echo | openssl s_client -connect apps.nextcloud.com:443 -servername apps.nextclo
 
 Workarounds for full app-store access: a VPN, or a different network.
 
+## `/core/preview` returns 500 (broken file thumbnails)
+
+richdocuments registers Office/PDF **thumbnail** providers that render via
+Collabora's convert-to API, which fails on this setup (`fclose(): supplied
+resource is not a valid stream`). It only affects thumbnails — **editing is
+unaffected**. `make configure` pins `enabledPreviewProviders` to image/text
+types so Office/PDF show generic icons instead of erroring. To re-enable Office
+thumbnails you'd need Collabora's convert-to working (out of scope).
+
 ## Apps/Office don't load — `Failed to load module script ... MIME type "application/octet-stream"`
 
 The browser console shows this for `*.mjs` files. nginx's bundled `mime.types`

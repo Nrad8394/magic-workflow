@@ -80,4 +80,15 @@ $OCC richdocuments:activate-config >/dev/null 2>&1 \
   && echo "   [ok] Nextcloud Office connected to Collabora" \
   || echo "   [ok] Office WOPI set (discovery activates on first open)"
 
+# 4. Preview providers: pin to image/text only. richdocuments otherwise registers
+#    Office/PDF thumbnail providers that render via Collabora's convert-to API,
+#    which fails on this setup and spams 500s on /core/preview. Generic icons
+#    instead. (Editing is unaffected.)
+i=0
+for p in 'OC\Preview\PNG' 'OC\Preview\JPEG' 'OC\Preview\GIF' 'OC\Preview\BMP' 'OC\Preview\TXT' 'OC\Preview\MarkDown'; do
+  $OCC config:system:set enabledPreviewProviders $i --value "$p" >/dev/null 2>&1
+  i=$((i+1))
+done
+echo "   [ok] preview providers pinned (no Office/PDF thumbnail 500s)"
+
 echo "==> Configuration complete."
