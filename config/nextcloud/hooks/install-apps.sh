@@ -53,5 +53,7 @@ install_app() {  # name  tarball-url
 # ── Required apps (pinned for Nextcloud 32) ──────────────────────────────────
 install_app user_oidc     "https://github.com/nextcloud-releases/user_oidc/releases/download/v8.10.1/user_oidc-v8.10.1.tar.gz"
 install_app richdocuments "https://github.com/nextcloud-releases/richdocuments/releases/download/v9.1.0/richdocuments-v9.1.0.tar.gz"
+# External Sites: adds the other suite apps (Mattermost, etc.) into Nextcloud's nav.
+install_app external      "https://github.com/nextcloud-releases/external/releases/download/v7.0.1/external-v7.0.1.tar.gz"
 
 echo "[nc-apps] done."

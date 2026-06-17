@@ -91,4 +91,17 @@ for p in 'OC\Preview\PNG' 'OC\Preview\JPEG' 'OC\Preview\GIF' 'OC\Preview\BMP' 'O
 done
 echo "   [ok] preview providers pinned (no Office/PDF thumbnail 500s)"
 
+# 5. External Sites: surface the other suite apps inside Nextcloud's top app menu
+#    ("a space for apps"). redirect=true because Mattermost/Grafana/MinIO send
+#    frame-ancestors 'self' and can't be iframed — clicking navigates to them.
+if $OCC app:list 2>/dev/null | grep -q "external:"; then
+  MM="https://$(get MATTERMOST_HOST)"
+  GF="https://$(get GRAFANA_HOST)"
+  S3="https://$(get MINIO_CONSOLE_HOST)"
+  SITES='{"1":{"id":1,"name":"Mattermost","url":"'"$MM"'","lang":"","type":"link","device":"","icon":"external.svg","groups":[],"redirect":true},"2":{"id":2,"name":"Monitoring","url":"'"$GF"'","lang":"","type":"link","device":"","icon":"external.svg","groups":[],"redirect":true},"3":{"id":3,"name":"Storage","url":"'"$S3"'","lang":"","type":"link","device":"","icon":"external.svg","groups":[],"redirect":true}}'
+  $OCC config:app:set external sites --value "$SITES" >/dev/null 2>&1
+  $OCC config:app:set external max_site --value 3 >/dev/null 2>&1
+  echo "   [ok] External Sites: Mattermost + Monitoring + Storage in the app menu"
+fi
+
 echo "==> Configuration complete."

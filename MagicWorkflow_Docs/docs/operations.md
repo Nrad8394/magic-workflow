@@ -37,6 +37,7 @@ Two Nextcloud apps are needed for the suite's features:
 |-----|---------|
 | `user_oidc` | Keycloak single sign-on |
 | `richdocuments` | Nextcloud Office (Collabora editing) |
+| `external` | "App menu" — adds Mattermost / Monitoring / Storage to Nextcloud's top bar |
 
 These are **installed automatically** on Nextcloud start by a hook
 (`config/nextcloud/hooks/install-apps.sh`) that pulls the release tarballs
@@ -60,6 +61,20 @@ Then wire them up (idempotent, one command each):
 make sso-connect      # register Keycloak as a Nextcloud login provider
 make office-connect   # point Nextcloud Office at Collabora
 ```
+
+### App menu — reaching Mattermost (and others) from Nextcloud
+
+`make configure` registers **Mattermost**, **Monitoring** (Grafana) and
+**Storage** (MinIO) as entries in Nextcloud's top **app menu** (via the
+`external` app). Clicking **Mattermost** there takes you straight to it — a
+single "space for apps" inside Nextcloud.
+
+They open as full-page navigations (`redirect=true`) rather than embedded
+iframes, because Mattermost/Grafana/MinIO send `Content-Security-Policy:
+frame-ancestors 'self'` and refuse to be framed. To truly *embed* an app inside
+the Nextcloud chrome you'd have to relax that app's CSP at the edge proxy
+(security trade-off) — not done by default. Combined with shared SSO, clicking
+through lands you already logged in.
 
 ## Nextcloud admin
 
