@@ -1,0 +1,34 @@
+# OpenShift overlay.
+#   - Uses Routes instead of Ingress.
+#   - Drops the pod securityContext so the restricted-v2 SCC assigns UID/fsGroup.
+#   - Collabora needs MKNOD + a non-default UID; grant it the anyuid SCC:
+#       oc create sa magic-workflow -n <ns>            # (or rely on serviceAccount.create)
+#       oc adm policy add-scc-to-user anyuid -z magic-workflow -n <ns>
+#     and set serviceAccount.name accordingly if you pre-create it.
+platform: openshift
+
+ingress:
+  enabled: false           # Routes are generated instead (see route.yaml)
+
+route:
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+# Let the SCC pick the UID range — do not pin fsGroup/runAsUser.
+podSecurityContext: {}
+
+domain: apps.example.com
+hosts:
+  nextcloud: cloud.apps.example.com
+  mattermost: chat.apps.example.com
+  collabora: office.apps.example.com
+  keycloak: id.apps.example.com
+  homer: dash.apps.example.com
+  minioConsole: s3.apps.example.com
+  grafana: grafana.apps.example.com
+
+monitoring:
+  enabled: false           # prefer the cluster's built-in monitoring on OCP
+backup:
+  enabled: true

@@ -3,6 +3,7 @@
 # browser-side setup the user must do (hosts file + cert trust).
 set -u
 cd "$(dirname "$0")/.."
+. scripts/lib/engine.sh
 get() { grep -E "^$1=" .env | cut -d= -f2-; }
 HP="$(get HTTPS_PORT)"; HP="${HP:-443}"
 
@@ -18,8 +19,8 @@ probe() { # label host path
 
 echo "Magic Workflow — doctor"
 echo "── Containers ─────────────────────────────────────────"
-docker compose -f docker-compose.yml -f docker-compose.monitoring.yml ps \
-  --format "  {{.Name}}  {{.Status}}" 2>/dev/null | sed "s/magicworkflow-//"
+$COMPOSE -f docker-compose.yml -f docker-compose.monitoring.yml ps \
+  --format "  {{.Name}}  {{.Status}}" 2>/dev/null | sed "s/magicworkflow[-_]//"
 
 echo "── Endpoints via the proxy (server side) ──────────────"
 probe Nextcloud  "$(get NEXTCLOUD_HOST)"  /status.php
@@ -30,7 +31,7 @@ probe Dashboard  "$(get HOMER_HOST)"      /
 probe MinIO      "$(get MINIO_CONSOLE_HOST)" /
 
 echo "── Nextcloud wiring ───────────────────────────────────"
-OCC="docker compose exec -T -u www-data nextcloud-app php occ"
+OCC="$COMPOSE exec -T -u www-data nextcloud-app php occ"
 $OCC app:list 2>/dev/null | grep -q user_oidc     && echo "  [ OK ] user_oidc installed"     || echo "  [FAIL] user_oidc missing (make nc-apps)"
 $OCC app:list 2>/dev/null | grep -q richdocuments && echo "  [ OK ] richdocuments installed" || echo "  [FAIL] richdocuments missing (make nc-apps)"
 $OCC user_oidc:provider 2>/dev/null | grep -q Keycloak && echo "  [ OK ] Keycloak OIDC provider registered" || echo "  [FAIL] OIDC provider missing (make configure)"

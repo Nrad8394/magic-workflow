@@ -2,11 +2,11 @@
 # Probe each core service via the running containers.
 set -u
 cd "$(dirname "$0")/.."
-C="docker compose"
+. scripts/lib/engine.sh
 
 probe() { # name  cmd...
   local name="$1"; shift
-  if $C exec -T "$@" >/dev/null 2>&1; then
+  if $COMPOSE exec -T "$@" >/dev/null 2>&1; then
     printf "  [\033[32m OK \033[0m] %s\n" "$name"
   else
     printf "  [\033[31mFAIL\033[0m] %s\n" "$name"
@@ -15,7 +15,7 @@ probe() { # name  cmd...
 
 echo "Magic Workflow — health:"
 probe "postgres"   db        pg_isready -U "$(grep ^POSTGRES_SUPER_USER .env | cut -d= -f2)"
-probe "redis"      redis     sh -c 'redis-cli -a "$REDIS_PASSWORD" ping'
+probe "redis"      redis     redis-cli ping
 probe "minio"      minio     mc ready local
 probe "keycloak"   keycloak  sh -c 'exec 3<>/dev/tcp/localhost/9000; echo ok'
 probe "nextcloud"  nextcloud-app sh -c 'php occ status >/dev/null 2>&1 || true; exec 3<>/dev/tcp/localhost/9000; echo ok'

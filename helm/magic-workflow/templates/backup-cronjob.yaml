@@ -1,0 +1,72 @@
+{{- if .Values.backup.enabled }}
+{{- if .Values.backup.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "mw.fullname" . }}-backups
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources: { requests: { storage: {{ .Values.backup.persistence.size }} } }
+  {{- $sc := .Values.backup.persistence.storageClass | default .Values.global.storageClass }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "mw.fullname" . }}-backup
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: {{ include "mw.serviceAccountName" . }}
+          {{- with .Values.global.imagePullSecrets }}
+          imagePullSecrets: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "mw.podSecurityContext" . | nindent 10 }}
+          containers:
+            - name: backup
+              image: {{ include "mw.image" (dict "root" . "image" .Values.postgres.image) }}
+              imagePullPolicy: {{ include "mw.imagePullPolicy" (dict "root" .) }}
+              command: ["/bin/bash", "/usr/local/bin/backup.sh"]
+              env:
+                - { name: PGHOST, value: "{{ include "mw.fullname" . }}-postgres" }
+                - name: PGUSER
+                  valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: POSTGRES_SUPER_USER } }
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: POSTGRES_SUPER_PASSWORD } }
+                - { name: BACKUP_KEEP_DAYS, value: {{ .Values.backup.keepDays | quote }} }
+              volumeMounts:
+                - { name: script, mountPath: /usr/local/bin/backup.sh, subPath: backup.sh }
+                - { name: backups, mountPath: /backups }
+          volumes:
+            - name: script
+              configMap:
+                name: {{ include "mw.fullname" . }}-backup
+                defaultMode: 0755
+            - name: backups
+              {{- if .Values.backup.persistence.enabled }}
+              persistentVolumeClaim: { claimName: {{ include "mw.fullname" . }}-backups }
+              {{- else }}
+              emptyDir: {}
+              {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mw.fullname" . }}-backup
+  labels: {{- include "mw.labels" . | nindent 4 }}
+data:
+  backup.sh: |
+{{ .Files.Get "files/backup.sh" | indent 4 }}
+{{- end }}

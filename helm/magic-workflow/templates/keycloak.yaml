@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mw.fullname" . }}-keycloak
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+    {{- include "mw.componentLabels" (dict "root" . "component" "keycloak") | nindent 4 }}
+spec:
+  ports:
+    - { name: http, port: 8080, targetPort: 8080 }
+    - { name: management, port: 9000, targetPort: 9000 }
+  selector:
+    {{- include "mw.componentLabels" (dict "root" . "component" "keycloak") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mw.fullname" . }}-keycloak
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+    {{- include "mw.componentLabels" (dict "root" . "component" "keycloak") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mw.componentLabels" (dict "root" . "component" "keycloak") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mw.componentLabels" (dict "root" . "component" "keycloak") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "mw.serviceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "mw.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: keycloak
+          image: {{ include "mw.image" (dict "root" . "image" .Values.keycloak.image) }}
+          imagePullPolicy: {{ include "mw.imagePullPolicy" (dict "root" .) }}
+          args:
+            - start
+            {{- if .Values.keycloak.importRealm }}
+            - --import-realm
+            {{- end }}
+          env:
+            - { name: TZ, value: {{ .Values.timezone | quote }} }
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://{{ include "mw.fullname" . }}-postgres:5432/keycloak" }
+            - { name: KC_DB_USERNAME, value: keycloak }
+            - name: KC_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: KEYCLOAK_DB_PASSWORD } }
+            - { name: KC_HOSTNAME, value: "https://{{ .Values.hosts.keycloak }}" }
+            - { name: KC_HOSTNAME_ADMIN, value: "https://{{ .Values.hosts.keycloak }}" }
+            - { name: KC_PROXY_HEADERS, value: xforwarded }
+            - { name: KC_HTTP_ENABLED, value: "true" }
+            - { name: KC_HEALTH_ENABLED, value: "true" }
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: KEYCLOAK_ADMIN } }
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: KEYCLOAK_ADMIN_PASSWORD } }
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: management, containerPort: 9000 }
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 9000 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 30
+          {{- if .Values.keycloak.importRealm }}
+          volumeMounts:
+            - { name: realm, mountPath: /opt/keycloak/data/import, readOnly: true }
+          {{- end }}
+          resources: {{- toYaml .Values.keycloak.resources | nindent 12 }}
+      {{- if .Values.keycloak.importRealm }}
+      volumes:
+        - name: realm
+          secret:
+            secretName: {{ include "mw.fullname" . }}-keycloak-realm
+      {{- end }}

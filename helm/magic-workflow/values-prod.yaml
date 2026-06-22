@@ -1,0 +1,44 @@
+# Production on a managed/self-hosted Kubernetes cluster.
+#   - Real hostnames (override below) with TLS via cert-manager.
+#   - Monitoring + nightly backups enabled.
+#   - Set a real storageClass and supply secrets via --set or an existingSecret.
+platform: kubernetes
+
+domain: example.com
+hosts:
+  nextcloud: cloud.example.com
+  mattermost: chat.example.com
+  collabora: office.example.com
+  keycloak: id.example.com
+  homer: dash.example.com
+  minioConsole: s3.example.com
+  grafana: grafana.example.com
+
+global:
+  storageClass: ""          # e.g. gp3 / managed-csi / longhorn
+
+ingress:
+  className: nginx
+  tls:
+    enabled: true
+    wildcardSecretName: ""  # or leave blank to use per-host cert-manager certs
+  certManager:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
+
+monitoring:
+  enabled: true
+backup:
+  enabled: true
+  schedule: "0 3 * * *"
+  keepDays: 30
+
+postgres:   { persistence: { size: 50Gi } }
+minio:      { persistence: { size: 500Gi } }
+nextcloud:  { persistence: { size: 20Gi } }
+mattermost: { persistence: { size: 20Gi } }
+
+# Provide credentials out-of-band in production:
+#   kubectl create secret generic mw-secrets --from-literal=... (all keys)
+#   helm install ... --set existingSecret=mw-secrets
+existingSecret: ""

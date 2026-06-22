@@ -9,14 +9,14 @@
 # =============================================================================
 set -u
 cd "$(dirname "$0")/.."
-P=magicworkflow
-OCC="docker compose exec -T -u www-data nextcloud-app php occ"
+. scripts/lib/engine.sh
+OCC="$COMPOSE exec -T -u www-data nextcloud-app php occ"
 get() { grep -E "^$1=" .env | cut -d= -f2-; }
 
 wait_healthy() { # service  max_tries
   local c="$1" max="${2:-60}" n=0
   printf "   waiting for %s" "$c"
-  until [ "$(docker inspect -f '{{.State.Health.Status}}' ${P}-$c-1 2>/dev/null)" = healthy ]; do
+  until [ "$(chealth "$c")" = healthy ]; do
     n=$((n+1)); [ $n -gt $max ] && { echo " ... still not healthy (continuing)"; return 1; }
     printf "."; sleep 5
   done
@@ -31,7 +31,7 @@ wait_healthy collabora
 # 0. Force Keycloak's client secrets to match .env. Keycloak only imports the
 #    realm once, so an older secret can get stuck in its DB while the apps use
 #    the current .env value -> "Invalid client credentials" at token exchange.
-KC="docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh"
+KC="$COMPOSE exec -T keycloak /opt/keycloak/bin/kcadm.sh"
 REALM="$(get KEYCLOAK_REALM)"
 if $KC config credentials --server http://localhost:8080 --realm master \
      --user "$(get KEYCLOAK_ADMIN)" --password "$(get KEYCLOAK_ADMIN_PASSWORD)" >/dev/null 2>&1; then

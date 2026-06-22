@@ -1,0 +1,33 @@
+Magic Workflow has been deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Platform: {{ .Values.platform }}
+
+Services (reachable once DNS for the hostnames points at your {{ if eq (include "mw.isOpenShift" .) "true" }}Routes{{ else }}Ingress controller{{ end }}):
+
+  Dashboard   https://{{ .Values.hosts.homer }}
+  Nextcloud   https://{{ .Values.hosts.nextcloud }}
+  Mattermost  https://{{ .Values.hosts.mattermost }}
+  Keycloak    https://{{ .Values.hosts.keycloak }}
+  MinIO       https://{{ .Values.hosts.minioConsole }}
+{{- if .Values.monitoring.enabled }}
+  Grafana     https://{{ .Values.hosts.grafana }}
+{{- end }}
+
+1) Watch rollout:
+     kubectl -n {{ .Release.Namespace }} get pods -w
+
+2) IMPORTANT — the hostnames above must resolve *inside the cluster* to the
+   Ingress/Route too, so Nextcloud can reach Keycloak (OIDC) and Collabora
+   (WOPI) server-side. Use real DNS, or add CoreDNS rewrites / pod hostAliases.
+
+{{- if not .Values.existingSecret }}
+{{- if eq .Values.secrets.postgresSuperPassword "change_me_super_pw" }}
+
+   ⚠  You are using the DEFAULT credentials from values.yaml. Set real secrets
+      (-f your-values.yaml or --set secrets.*) or supply an existingSecret
+      before exposing this to anyone.
+{{- end }}
+{{- end }}
+
+3) Admin logins are in the Secret "{{ include "mw.secretName" . }}":
+     kubectl -n {{ .Release.Namespace }} get secret {{ include "mw.secretName" . }} -o jsonpath='{.data.NEXTCLOUD_ADMIN_PASSWORD}' | base64 -d

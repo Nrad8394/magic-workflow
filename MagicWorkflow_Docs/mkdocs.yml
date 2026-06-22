@@ -75,6 +75,7 @@ nav:
   - Architecture: architecture.md
   - Install locally: install-local.md
   - Install on a server: install-server.md
+  - Install on RHEL (Podman): install-rhel.md
   - Single sign-on: sso.md
   - Storage (MinIO/S3): storage.md
   - Backups & restore: backups.md
@@ -82,4 +83,5 @@ nav:
   - Operations: operations.md
   - Enterprise guide: enterprise.md
   - Kubernetes: kubernetes.md
+  - Air-gapped / offline: air-gapped.md
   - Troubleshooting: troubleshooting.md

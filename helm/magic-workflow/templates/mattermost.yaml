@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mw.fullname" . }}-mattermost
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+    {{- include "mw.componentLabels" (dict "root" . "component" "mattermost") | nindent 4 }}
+spec:
+  ports:
+    - { name: http, port: 8065, targetPort: 8065 }
+    - { name: metrics, port: 8067, targetPort: 8067 }
+  selector:
+    {{- include "mw.componentLabels" (dict "root" . "component" "mattermost") | nindent 4 }}
+{{- if .Values.mattermost.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "mw.fullname" . }}-mattermost
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources: { requests: { storage: {{ .Values.mattermost.persistence.size }} } }
+  {{- $sc := .Values.mattermost.persistence.storageClass | default .Values.global.storageClass }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mw.fullname" . }}-mattermost
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+    {{- include "mw.componentLabels" (dict "root" . "component" "mattermost") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      {{- include "mw.componentLabels" (dict "root" . "component" "mattermost") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mw.componentLabels" (dict "root" . "component" "mattermost") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "mw.serviceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "mw.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: mattermost
+          image: {{ include "mw.image" (dict "root" . "image" .Values.mattermost.image) }}
+          imagePullPolicy: {{ include "mw.imagePullPolicy" (dict "root" .) }}
+          env:
+            - { name: TZ, value: {{ .Values.timezone | quote }} }
+            - { name: MM_SQLSETTINGS_DRIVERNAME, value: postgres }
+            - name: MM_SQLSETTINGS_DATASOURCE
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: MM_DATASOURCE } }
+            - { name: MM_BLEVESETTINGS_INDEXDIR, value: /mattermost/bleve-indexes }
+            - { name: MM_SERVICESETTINGS_SITEURL, value: "https://{{ .Values.hosts.mattermost }}" }
+            - { name: MM_SERVICESETTINGS_ENABLELOCALMODE, value: "true" }
+            - { name: MM_FILESETTINGS_DRIVERNAME, value: amazons3 }
+            - { name: MM_FILESETTINGS_AMAZONS3BUCKET, value: {{ .Values.minio.buckets.mattermost | quote }} }
+            - { name: MM_FILESETTINGS_AMAZONS3ENDPOINT, value: "{{ include "mw.fullname" . }}-minio:9000" }
+            - name: MM_FILESETTINGS_AMAZONS3ACCESSKEYID
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: S3_ACCESS_KEY } }
+            - name: MM_FILESETTINGS_AMAZONS3SECRETACCESSKEY
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: S3_SECRET_KEY } }
+            - { name: MM_FILESETTINGS_AMAZONS3SSL, value: "false" }
+            - { name: MM_FILESETTINGS_AMAZONS3PATHPREFIX, value: "" }
+            # SSO via Keycloak (Team Edition uses the GitLab OAuth slot for OIDC).
+            - { name: MM_GITLABSETTINGS_ENABLE, value: "true" }
+            - { name: MM_GITLABSETTINGS_ID, value: mattermost }
+            - name: MM_GITLABSETTINGS_SECRET
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: OIDC_MATTERMOST_SECRET } }
+            - { name: MM_GITLABSETTINGS_SCOPE, value: "openid profile email" }
+            - { name: MM_GITLABSETTINGS_AUTHENDPOINT, value: "https://{{ .Values.hosts.keycloak }}/realms/{{ .Values.keycloak.realm }}/protocol/openid-connect/auth" }
+            - { name: MM_GITLABSETTINGS_TOKENENDPOINT, value: "https://{{ .Values.hosts.keycloak }}/realms/{{ .Values.keycloak.realm }}/protocol/openid-connect/token" }
+            - { name: MM_GITLABSETTINGS_USERAPIENDPOINT, value: "https://{{ .Values.hosts.keycloak }}/realms/{{ .Values.keycloak.realm }}/protocol/openid-connect/userinfo" }
+          ports:
+            - { name: http, containerPort: 8065 }
+            - { name: metrics, containerPort: 8067 }
+          readinessProbe:
+            httpGet: { path: /api/v4/system/ping, port: 8065 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 20
+          volumeMounts:
+            - { name: data, mountPath: /mattermost/data,          subPath: data }
+            - { name: data, mountPath: /mattermost/config,        subPath: config }
+            - { name: data, mountPath: /mattermost/logs,          subPath: logs }
+            - { name: data, mountPath: /mattermost/plugins,       subPath: plugins }
+            - { name: data, mountPath: /mattermost/client/plugins, subPath: client-plugins }
+            - { name: data, mountPath: /mattermost/bleve-indexes, subPath: bleve-indexes }
+          resources: {{- toYaml .Values.mattermost.resources | nindent 12 }}
+      volumes:
+        - name: data
+          {{- if .Values.mattermost.persistence.enabled }}
+          persistentVolumeClaim: { claimName: {{ include "mw.fullname" . }}-mattermost }
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

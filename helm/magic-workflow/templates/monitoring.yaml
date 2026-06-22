@@ -1,0 +1,373 @@
+{{- if .Values.monitoring.enabled }}
+{{- $fullname := include "mw.fullname" . -}}
+# =============================== Prometheus ==================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-prometheus
+  labels: {{- include "mw.labels" . | nindent 4 }}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 30s
+      evaluation_interval: 30s
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: ["localhost:9090"]
+      - job_name: node
+        static_configs:
+          - targets: ["{{ $fullname }}-node-exporter:9100"]
+      - job_name: mattermost
+        static_configs:
+          - targets: ["{{ $fullname }}-mattermost:8067"]
+      - job_name: minio
+        metrics_path: /minio/v2/metrics/cluster
+        static_configs:
+          - targets: ["{{ $fullname }}-minio:9000"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-prometheus
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  ports: [{ name: http, port: 9090, targetPort: 9090 }]
+  selector:
+    {{- include "mw.componentLabels" (dict "root" . "component" "prometheus") | nindent 4 }}
+{{- if .Values.monitoring.prometheus.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-prometheus
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources: { requests: { storage: {{ .Values.monitoring.prometheus.persistence.size }} } }
+  {{- $sc := .Values.monitoring.prometheus.persistence.storageClass | default .Values.global.storageClass }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-prometheus
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: {{- include "mw.componentLabels" (dict "root" . "component" "prometheus") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "mw.componentLabels" (dict "root" . "component" "prometheus") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "mw.serviceAccountName" . }}
+      {{- include "mw.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: prometheus
+          image: {{ include "mw.image" (dict "root" . "image" .Values.monitoring.prometheus.image) }}
+          imagePullPolicy: {{ include "mw.imagePullPolicy" (dict "root" .) }}
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time={{ .Values.monitoring.prometheus.retention }}
+          ports: [{ name: http, containerPort: 9090 }]
+          volumeMounts:
+            - { name: config, mountPath: /etc/prometheus }
+            - { name: data, mountPath: /prometheus }
+      volumes:
+        - name: config
+          configMap: { name: {{ $fullname }}-prometheus }
+        - name: data
+          {{- if .Values.monitoring.prometheus.persistence.enabled }}
+          persistentVolumeClaim: { claimName: {{ $fullname }}-prometheus }
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+# ================================== Loki =====================================
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-loki
+  labels: {{- include "mw.labels" . | nindent 4 }}
+data:
+  loki-config.yml: |
+{{ .Files.Get "files/loki-config.yml" | indent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-loki
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  ports: [{ name: http, port: 3100, targetPort: 3100 }]
+  selector:
+    {{- include "mw.componentLabels" (dict "root" . "component" "loki") | nindent 4 }}
+{{- if .Values.monitoring.loki.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-loki
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources: { requests: { storage: {{ .Values.monitoring.loki.persistence.size }} } }
+  {{- $sc := .Values.monitoring.loki.persistence.storageClass | default .Values.global.storageClass }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-loki
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: {{- include "mw.componentLabels" (dict "root" . "component" "loki") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "mw.componentLabels" (dict "root" . "component" "loki") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "mw.serviceAccountName" . }}
+      {{- include "mw.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: loki
+          image: {{ include "mw.image" (dict "root" . "image" .Values.monitoring.loki.image) }}
+          imagePullPolicy: {{ include "mw.imagePullPolicy" (dict "root" .) }}
+          args: ["-config.file=/etc/loki/loki-config.yml"]
+          ports: [{ name: http, containerPort: 3100 }]
+          volumeMounts:
+            - { name: config, mountPath: /etc/loki }
+            - { name: data, mountPath: /loki }
+      volumes:
+        - name: config
+          configMap: { name: {{ $fullname }}-loki }
+        - name: data
+          {{- if .Values.monitoring.loki.persistence.enabled }}
+          persistentVolumeClaim: { claimName: {{ $fullname }}-loki }
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+# ================================ Promtail ===================================
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $fullname }}-promtail
+  labels: {{- include "mw.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-promtail
+  labels: {{- include "mw.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $fullname }}-promtail
+  labels: {{- include "mw.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $fullname }}-promtail
+subjects:
+  - kind: ServiceAccount
+    name: {{ $fullname }}-promtail
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-promtail
+  labels: {{- include "mw.labels" . | nindent 4 }}
+data:
+  promtail-config.yml: |
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+    positions:
+      filename: /run/promtail/positions.yaml
+    clients:
+      - url: http://{{ $fullname }}-loki:3100/loki/api/v1/push
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: __host__
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            target_label: component
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - replacement: /var/log/pods/*$1/*.log
+            separator: /
+            source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+            target_label: __path__
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ $fullname }}-promtail
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels: {{- include "mw.componentLabels" (dict "root" . "component" "promtail") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "mw.componentLabels" (dict "root" . "component" "promtail") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $fullname }}-promtail
+      containers:
+        - name: promtail
+          image: {{ include "mw.image" (dict "root" . "image" .Values.monitoring.promtail.image) }}
+          imagePullPolicy: {{ include "mw.imagePullPolicy" (dict "root" .) }}
+          args: ["-config.file=/etc/promtail/promtail-config.yml"]
+          env:
+            - name: HOSTNAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+          volumeMounts:
+            - { name: config, mountPath: /etc/promtail }
+            - { name: run, mountPath: /run/promtail }
+            - { name: pods, mountPath: /var/log/pods, readOnly: true }
+            - { name: containers, mountPath: /var/lib/docker/containers, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: {{ $fullname }}-promtail }
+        - { name: run, emptyDir: {} }
+        - { name: pods, hostPath: { path: /var/log/pods } }
+        - { name: containers, hostPath: { path: /var/lib/docker/containers } }
+# =============================== node-exporter ===============================
+{{- if .Values.monitoring.nodeExporter.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-node-exporter
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  ports: [{ name: metrics, port: 9100, targetPort: 9100 }]
+  selector:
+    {{- include "mw.componentLabels" (dict "root" . "component" "node-exporter") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ $fullname }}-node-exporter
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels: {{- include "mw.componentLabels" (dict "root" . "component" "node-exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "mw.componentLabels" (dict "root" . "component" "node-exporter") | nindent 8 }}
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+        - name: node-exporter
+          image: {{ include "mw.image" (dict "root" . "image" .Values.monitoring.nodeExporter.image) }}
+          imagePullPolicy: {{ include "mw.imagePullPolicy" (dict "root" .) }}
+          args: ["--path.rootfs=/host"]
+          ports: [{ name: metrics, containerPort: 9100 }]
+          volumeMounts:
+            - { name: rootfs, mountPath: /host, readOnly: true }
+      volumes:
+        - { name: rootfs, hostPath: { path: / } }
+{{- end }}
+# ================================= Grafana ===================================
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-grafana
+  labels: {{- include "mw.labels" . | nindent 4 }}
+data:
+  datasources.yml: |
+    apiVersion: 1
+    datasources:
+      - { name: Prometheus, type: prometheus, access: proxy, url: "http://{{ $fullname }}-prometheus:9090", isDefault: true }
+      - { name: Loki, type: loki, access: proxy, url: "http://{{ $fullname }}-loki:3100" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-grafana
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  ports: [{ name: http, port: 3000, targetPort: 3000 }]
+  selector:
+    {{- include "mw.componentLabels" (dict "root" . "component" "grafana") | nindent 4 }}
+{{- if .Values.monitoring.grafana.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-grafana
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources: { requests: { storage: {{ .Values.monitoring.grafana.persistence.size }} } }
+  {{- $sc := .Values.monitoring.grafana.persistence.storageClass | default .Values.global.storageClass }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-grafana
+  labels: {{- include "mw.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: {{- include "mw.componentLabels" (dict "root" . "component" "grafana") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "mw.componentLabels" (dict "root" . "component" "grafana") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "mw.serviceAccountName" . }}
+      {{- include "mw.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: grafana
+          image: {{ include "mw.image" (dict "root" . "image" .Values.monitoring.grafana.image) }}
+          imagePullPolicy: {{ include "mw.imagePullPolicy" (dict "root" .) }}
+          env:
+            - { name: GF_SERVER_ROOT_URL, value: "https://{{ .Values.hosts.grafana }}" }
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: GRAFANA_ADMIN_USER } }
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: GRAFANA_ADMIN_PASSWORD } }
+          ports: [{ name: http, containerPort: 3000 }]
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/grafana }
+            - { name: provisioning, mountPath: /etc/grafana/provisioning/datasources }
+      volumes:
+        - name: provisioning
+          configMap: { name: {{ $fullname }}-grafana }
+        - name: data
+          {{- if .Values.monitoring.grafana.persistence.enabled }}
+          persistentVolumeClaim: { claimName: {{ $fullname }}-grafana }
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+{{- end }}

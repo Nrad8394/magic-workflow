@@ -33,6 +33,25 @@ Full documentation: [`MagicWorkflow_Docs/`](MagicWorkflow_Docs/) (MkDocs site).
 
 ---
 
+## Deployment options
+
+The same suite runs across single hosts and clusters. Pick your path:
+
+| Environment | How | Guide |
+|-------------|-----|-------|
+| **Docker** (Linux/macOS/Windows) | `make setup && make up` | [install-local](MagicWorkflow_Docs/docs/install-local.md) |
+| **Debian/Ubuntu server** (hardened) | `sudo bash scripts/install-server.sh` then `make up-full` | [install-server](MagicWorkflow_Docs/docs/install-server.md) |
+| **RHEL / Rocky / Alma / Fedora** (Podman) | `sudo bash scripts/install-rhel.sh` then `make up ENGINE=podman` | [install-rhel](MagicWorkflow_Docs/docs/install-rhel.md) |
+| **Kubernetes** (kind/k3s/EKS/GKE/AKS) | `helm install … helm/magic-workflow` | [kubernetes](MagicWorkflow_Docs/docs/kubernetes.md) |
+| **OpenShift** | `helm … -f values-openshift.yaml` (Routes + SCC) | [kubernetes](MagicWorkflow_Docs/docs/kubernetes.md) |
+| **Air-gapped / offline** | `make mirror-images` + `make fetch-nc-apps` | [air-gapped](MagicWorkflow_Docs/docs/air-gapped.md) |
+
+The Docker Compose stack is engine-agnostic: every `make` target accepts
+`ENGINE=podman`. The Kubernetes path is a self-contained umbrella Helm chart in
+[`helm/magic-workflow/`](helm/magic-workflow/).
+
+---
+
 ## Quick start (local)
 
 > Prereqs: Docker Engine 24+ & Compose v2, `openssl`, `make`. On Windows use

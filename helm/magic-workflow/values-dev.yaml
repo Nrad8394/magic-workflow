@@ -1,0 +1,36 @@
+# Dev / local cluster (kind, k3s, minikube). Small footprint, no monitoring.
+# Supply TLS yourself or front it with `kubectl port-forward` for quick tests.
+platform: kubernetes
+
+ingress:
+  className: nginx
+  tls:
+    enabled: false        # plain HTTP for local testing
+  certManager:
+    enabled: false
+
+monitoring:
+  enabled: false
+backup:
+  enabled: false
+
+postgres:   { persistence: { size: 2Gi } }
+redis:      { persistence: { size: 1Gi } }
+minio:      { persistence: { size: 5Gi } }
+nextcloud:  { persistence: { size: 5Gi } }
+mattermost: { persistence: { size: 2Gi } }
+
+# CHANGE these — defaults are placeholders only.
+secrets:
+  postgresSuperPassword: devSuperPw123
+  nextcloudDbPassword: devNcPw123
+  mattermostDbPassword: devMmPw123
+  keycloakDbPassword: devKcPw123
+  minioRootPassword: devMinioPw123
+  s3SecretKey: devS3Secret123
+  keycloakAdminPassword: devKcAdmin123
+  oidcNextcloudSecret: devOidcNc123
+  oidcMattermostSecret: devOidcMm123
+  nextcloudAdminPassword: devNcAdmin123
+  collaboraPassword: devCollabora123
+  grafanaAdminPassword: devGrafana123

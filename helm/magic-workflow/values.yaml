@@ -1,0 +1,217 @@
+# =============================================================================
+# Magic Workflow — default values
+#
+# Mirrors the Docker Compose `.env`. Override per environment with one of the
+# bundled files (-f values-dev.yaml | values-prod.yaml | values-openshift.yaml |
+# values-airgap.yaml) or your own. See helm/magic-workflow/README.md.
+# =============================================================================
+
+# --- Global -----------------------------------------------------------------
+global:
+  # Prefix prepended to every image, e.g. "registry.example.com/" for an
+  # air-gapped mirror. Empty = pull from the public registries.
+  imageRegistry: ""
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+  # storageClass applied to every PVC unless a component overrides it.
+  storageClass: ""
+
+# kubernetes | openshift. OpenShift swaps Ingress for Route and relaxes
+# securityContext so the restricted-v2 SCC assigns UIDs.
+platform: kubernetes
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Default pod securityContext (ignored on OpenShift — SCC decides).
+podSecurityContext:
+  fsGroup: 1000
+
+timezone: Africa/Nairobi
+
+# --- Domain / hostnames -----------------------------------------------------
+# Every service is reached at its own hostname through the Ingress/Route.
+domain: magic.test
+hosts:
+  nextcloud: cloud.magic.test
+  mattermost: chat.magic.test
+  collabora: office.magic.test
+  keycloak: id.magic.test
+  homer: dash.magic.test
+  minioConsole: s3.magic.test
+  grafana: grafana.magic.test
+
+# --- Ingress (vanilla Kubernetes) -------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  # Extra annotations merged onto every host (e.g. cert-manager, body size).
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10g"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+  tls:
+    enabled: true
+    # If set, every host uses this single (wildcard) TLS secret. Otherwise each
+    # host gets a per-host secret named "<host>-tls" (supply or use cert-manager).
+    wildcardSecretName: ""
+  # cert-manager: set to issue certs automatically (adds the annotation).
+  certManager:
+    enabled: false
+    clusterIssuer: letsencrypt-prod
+
+# --- OpenShift Route (used when platform=openshift) -------------------------
+route:
+  # edge | reencrypt | passthrough
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+# --- Credentials ------------------------------------------------------------
+# Provide your own Secret with the same keys via existingSecret, OR let the
+# chart create one from the values below. CHANGE THESE before any real install.
+existingSecret: ""
+secrets:
+  postgresSuperUser: mwadmin
+  postgresSuperPassword: change_me_super_pw
+  nextcloudDbPassword: change_me_nc_db_pw
+  mattermostDbPassword: change_me_mm_db_pw
+  keycloakDbPassword: change_me_kc_db_pw
+  minioRootUser: mwminio
+  minioRootPassword: change_me_minio_pw
+  s3AccessKey: mw-app-access
+  s3SecretKey: change_me_s3_secret
+  keycloakAdmin: admin
+  keycloakAdminPassword: change_me_kc_admin_pw
+  oidcNextcloudSecret: change_me_oidc_nc
+  oidcMattermostSecret: change_me_oidc_mm
+  nextcloudAdminUser: admin
+  nextcloudAdminPassword: change_me_nc_admin_pw
+  collaboraUsername: admin
+  collaboraPassword: change_me_collabora_pw
+  grafanaAdminUser: admin
+  grafanaAdminPassword: change_me_grafana_pw
+
+# --- PostgreSQL -------------------------------------------------------------
+postgres:
+  image: { repository: postgres, tag: "16-alpine" }
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+
+# --- Redis ------------------------------------------------------------------
+redis:
+  image: { repository: redis, tag: "7-alpine" }
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 256Mi }
+
+# --- MinIO (shared S3) ------------------------------------------------------
+minio:
+  image: { repository: minio/minio, tag: "RELEASE.2025-04-22T22-12-26Z" }
+  mcImage: { repository: minio/mc, tag: "RELEASE.2025-04-16T18-13-26Z" }
+  buckets:
+    nextcloud: nextcloud
+    mattermost: mattermost
+  persistence:
+    enabled: true
+    size: 100Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+
+# --- Keycloak (SSO) ---------------------------------------------------------
+keycloak:
+  image: { repository: quay.io/keycloak/keycloak, tag: "26.1" }
+  realm: magicworkflow
+  importRealm: true
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 1Gi }
+
+# --- Nextcloud --------------------------------------------------------------
+nextcloud:
+  image: { repository: nextcloud, tag: "32-fpm" }
+  webImage: { repository: nginx, tag: "1.27-alpine" }
+  phpMemoryLimit: 512M
+  phpUploadLimit: 10G
+  cron:
+    enabled: true
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 2Gi }
+
+# --- Mattermost -------------------------------------------------------------
+mattermost:
+  image: { repository: mattermost/mattermost-team-edition, tag: "release-10.5" }
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 2Gi }
+
+# --- Collabora Online -------------------------------------------------------
+collabora:
+  image: { repository: collabora/code, tag: "latest" }
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 2Gi }
+
+# --- Homer dashboard --------------------------------------------------------
+homer:
+  enabled: true
+  image: { repository: b4bz/homer, tag: "latest" }
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 128Mi }
+
+# --- Nextcloud post-install configure Job (SSO + Office wiring) --------------
+configureJob:
+  enabled: true
+  image: { repository: nextcloud, tag: "32-fpm" }
+
+# --- Monitoring (Prometheus / Grafana / Loki / exporters) -------------------
+monitoring:
+  enabled: false
+  prometheus:
+    image: { repository: prom/prometheus, tag: "v3.2.1" }
+    retention: 30d
+    persistence: { enabled: true, size: 20Gi, storageClass: "" }
+  grafana:
+    image: { repository: grafana/grafana, tag: "11.5.2" }
+    persistence: { enabled: true, size: 5Gi, storageClass: "" }
+  loki:
+    image: { repository: grafana/loki, tag: "3.4.2" }
+    persistence: { enabled: true, size: 20Gi, storageClass: "" }
+  promtail:
+    image: { repository: grafana/promtail, tag: "3.4.2" }
+  nodeExporter:
+    enabled: true
+    image: { repository: prom/node-exporter, tag: "v1.9.0" }
+
+# --- Nightly database backup CronJob ----------------------------------------
+backup:
+  enabled: false
+  schedule: "0 3 * * *"
+  keepDays: 14
+  persistence: { enabled: true, size: 10Gi, storageClass: "" }

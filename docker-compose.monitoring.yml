@@ -10,11 +10,11 @@ x-logging: &default-logging
 
 services:
   prometheus:
-    image: prom/prometheus:${PROMETHEUS_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}prom/prometheus:${PROMETHEUS_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     volumes:
-      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
       - prometheus_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -23,13 +23,13 @@ services:
     networks: [internal]
 
   grafana:
-    image: grafana/grafana:${GRAFANA_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}grafana/grafana:${GRAFANA_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     depends_on: [prometheus, loki]
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro,z
     environment:
       TZ: ${TZ}
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
@@ -39,28 +39,28 @@ services:
     networks: [internal]
 
   loki:
-    image: grafana/loki:${LOKI_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}grafana/loki:${LOKI_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     command: -config.file=/etc/loki/loki-config.yml
     volumes:
-      - ./config/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - ./config/loki/loki-config.yml:/etc/loki/loki-config.yml:ro,z
       - loki_data:/loki
     networks: [internal]
 
   promtail:
-    image: grafana/promtail:${PROMTAIL_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}grafana/promtail:${PROMTAIL_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     command: -config.file=/etc/promtail/promtail-config.yml
     volumes:
-      - ./config/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - ./config/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro,z
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks: [internal]
 
   node-exporter:
-    image: prom/node-exporter:${NODE_EXPORTER_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}prom/node-exporter:${NODE_EXPORTER_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     command:
@@ -74,7 +74,7 @@ services:
 
   # ── Ops ──────────────────────────────────────────────────────────────────
   watchtower:
-    image: containrrr/watchtower:${WATCHTOWER_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}containrrr/watchtower:${WATCHTOWER_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     volumes:
@@ -90,14 +90,14 @@ services:
     networks: [internal]
 
   backup:
-    image: postgres:${POSTGRES_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}postgres:${POSTGRES_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      - ./config/backup/backup.sh:/usr/local/bin/backup.sh:ro
+      - ./config/backup/backup.sh:/usr/local/bin/backup.sh:ro,z
       - backups:/backups
     environment:
       TZ: ${TZ}

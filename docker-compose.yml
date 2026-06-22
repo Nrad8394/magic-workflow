@@ -25,7 +25,7 @@ x-logging: &default-logging
 services:
   # ───────────────────────────── EDGE PROXY ──────────────────────────────────
   proxy:
-    image: nginx:${NGINX_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}nginx:${NGINX_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     security_opt: [no-new-privileges:true]
@@ -40,9 +40,9 @@ services:
       - ${HTTP_PORT}:80
       - ${HTTPS_PORT}:443
     volumes:
-      - ./config/proxy/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./config/proxy/templates:/etc/nginx/templates:ro
-      - ./config/proxy/tls:/etc/nginx/tls:ro
+      - ./config/proxy/nginx.conf:/etc/nginx/nginx.conf:ro,z
+      - ./config/proxy/templates:/etc/nginx/templates:ro,z
+      - ./config/proxy/tls:/etc/nginx/tls:ro,z
     environment:
       TZ: ${TZ}
       # The official nginx entrypoint runs envsubst on /etc/nginx/templates/*.template.
@@ -73,13 +73,13 @@ services:
 
   # ──────────────────────────── SHARED BACKENDS ──────────────────────────────
   db:
-    image: postgres:${POSTGRES_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}postgres:${POSTGRES_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     security_opt: [no-new-privileges:true]
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./config/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+      - ./config/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro,z
     environment:
       TZ: ${TZ}
       POSTGRES_USER: ${POSTGRES_SUPER_USER}
@@ -97,7 +97,7 @@ services:
     networks: [internal]
 
   redis:
-    image: redis:${REDIS_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}redis:${REDIS_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     security_opt: [no-new-privileges:true]
@@ -114,7 +114,7 @@ services:
     networks: [internal]
 
   minio:
-    image: minio/minio:${MINIO_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}minio/minio:${MINIO_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     security_opt: [no-new-privileges:true]
@@ -136,13 +136,13 @@ services:
 
   # One-shot: create buckets + an app service-account scoped to them.
   minio-init:
-    image: minio/mc:${MC_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}minio/mc:${MC_IMAGE_TAG}
     depends_on:
       minio:
         condition: service_healthy
     entrypoint: ["/bin/sh", "/init/minio-init.sh"]
     volumes:
-      - ./scripts/minio-init.sh:/init/minio-init.sh:ro
+      - ./scripts/minio-init.sh:/init/minio-init.sh:ro,z
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -155,7 +155,7 @@ services:
 
   # ───────────────────────────────── SSO ─────────────────────────────────────
   keycloak:
-    image: quay.io/keycloak/keycloak:${KEYCLOAK_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}quay.io/keycloak/keycloak:${KEYCLOAK_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     depends_on:
@@ -165,7 +165,7 @@ services:
     # (Avoid --optimized unless you bake a `kc.sh build` into a custom image.)
     command: ["start", "--import-realm"]
     volumes:
-      - ./config/keycloak:/opt/keycloak/data/import:ro
+      - ./config/keycloak:/opt/keycloak/data/import:ro,z
     environment:
       TZ: ${TZ}
       KC_DB: postgres
@@ -194,7 +194,7 @@ services:
 
   # ──────────────────────────────── NEXTCLOUD ────────────────────────────────
   nextcloud-app:
-    image: nextcloud:${NEXTCLOUD_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}nextcloud:${NEXTCLOUD_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     depends_on:
@@ -210,11 +210,13 @@ services:
     entrypoint: ["/bin/sh", "-c", "cp /magic-ca.pem /usr/local/share/ca-certificates/magic-workflow.crt 2>/dev/null || true; update-ca-certificates >/dev/null 2>&1 || true; exec /entrypoint.sh php-fpm"]
     volumes:
       - nextcloud_app:/var/www/html
-      - ./config/nextcloud/php/zz-custom.ini:/usr/local/etc/php/conf.d/zz-custom.ini:ro
+      - ./config/nextcloud/php/zz-custom.ini:/usr/local/etc/php/conf.d/zz-custom.ini:ro,z
       # Auto-install required apps from GitHub on start (app store may be blocked).
-      - ./config/nextcloud/hooks/install-apps.sh:/docker-entrypoint-hooks.d/before-starting/install-apps.sh:ro
+      - ./config/nextcloud/hooks/install-apps.sh:/docker-entrypoint-hooks.d/before-starting/install-apps.sh:ro,z
+      # Pre-staged offline app tarballs (used first when present; see fetch-nc-apps.sh).
+      - ./config/nextcloud/apps-offline:/apps-offline:ro,z
       # Edge cert, trusted by the entrypoint wrapper above.
-      - ./config/proxy/tls/fullchain.pem:/magic-ca.pem:ro
+      - ./config/proxy/tls/fullchain.pem:/magic-ca.pem:ro,z
     environment:
       TZ: ${TZ}
       POSTGRES_HOST: db
@@ -248,7 +250,7 @@ services:
     networks: [internal]
 
   nextcloud-web:
-    image: nginx:${NGINX_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}nginx:${NGINX_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     security_opt: [no-new-privileges:true]
@@ -257,13 +259,13 @@ services:
         condition: service_started
     volumes:
       - nextcloud_app:/var/www/html:ro
-      - ./config/nextcloud/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nextcloud/nginx.conf:/etc/nginx/nginx.conf:ro,z
     environment:
       TZ: ${TZ}
     networks: [internal]
 
   nextcloud-cron:
-    image: nextcloud:${NEXTCLOUD_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}nextcloud:${NEXTCLOUD_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     depends_on:
@@ -271,7 +273,7 @@ services:
         condition: service_started
     volumes:
       - nextcloud_app:/var/www/html
-      - ./config/proxy/tls/fullchain.pem:/magic-ca.pem:ro
+      - ./config/proxy/tls/fullchain.pem:/magic-ca.pem:ro,z
     entrypoint: ["/bin/sh", "-c", "cp /magic-ca.pem /usr/local/share/ca-certificates/magic-workflow.crt 2>/dev/null || true; update-ca-certificates >/dev/null 2>&1 || true; exec /cron.sh"]
     environment:
       TZ: ${TZ}
@@ -283,7 +285,7 @@ services:
 
   # ──────────────────────────────── MATTERMOST ───────────────────────────────
   mattermost:
-    image: mattermost/${MATTERMOST_IMAGE}:${MATTERMOST_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}mattermost/${MATTERMOST_IMAGE}:${MATTERMOST_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     security_opt: [no-new-privileges:true]
@@ -336,7 +338,7 @@ services:
 
   # ──────────────────────────────── COLLABORA ────────────────────────────────
   collabora:
-    image: collabora/code:${COLLABORA_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}collabora/code:${COLLABORA_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     cap_add: [MKNOD]
@@ -364,11 +366,11 @@ services:
 
   # ──────────────────────────────── DASHBOARD ────────────────────────────────
   homer:
-    image: b4bz/homer:${HOMER_IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-}b4bz/homer:${HOMER_IMAGE_TAG}
     restart: unless-stopped
     logging: *default-logging
     volumes:
-      - ./config/homer:/www/assets:ro
+      - ./config/homer:/www/assets:ro,z
     environment:
       TZ: ${TZ}
       INIT_ASSETS: "0"

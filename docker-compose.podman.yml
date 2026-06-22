@@ -1,0 +1,32 @@
+# =============================================================================
+# Podman/RHEL overlay — applied automatically by `make up-full ENGINE=podman`.
+#
+# Only the monitoring/ops services need changes: they reach the container engine
+# through the Docker socket and Docker-specific log paths, which differ on
+# Podman. The core suite (proxy, db, apps...) is engine-neutral once the bind
+# mounts carry SELinux :z labels (already in docker-compose.yml).
+#
+# Prerequisite: enable Podman's API socket so watchtower/promtail can reach it
+#   rootful : sudo systemctl enable --now podman.socket   (/run/podman/podman.sock)
+#   rootless: systemctl --user enable --now podman.socket  (/run/user/<uid>/podman/podman.sock)
+# For rootless, override PODMAN_SOCK below, e.g.
+#   PODMAN_SOCK=/run/user/1000/podman/podman.sock make up-full ENGINE=podman
+# =============================================================================
+
+services:
+  # Promtail: Podman containers log to the systemd journal, not
+  # /var/lib/docker/containers — scrape the journal instead.
+  promtail:
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./config/promtail/promtail-config.podman.yml:/etc/promtail/promtail-config.yml:ro,z
+      - /var/log/journal:/var/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+      - /run/log/journal:/run/log/journal:ro
+
+  # node-exporter works as-is (pid: host + /:/host:ro).
+
+  # Watchtower talks the Docker API; Podman exposes a Docker-compatible socket.
+  watchtower:
+    volumes:
+      - ${PODMAN_SOCK:-/run/podman/podman.sock}:/var/run/docker.sock

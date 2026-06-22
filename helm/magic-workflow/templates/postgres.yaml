@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mw.fullname" . }}-postgres
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+    {{- include "mw.componentLabels" (dict "root" . "component" "postgres") | nindent 4 }}
+spec:
+  ports:
+    - { name: postgres, port: 5432, targetPort: 5432 }
+  selector:
+    {{- include "mw.componentLabels" (dict "root" . "component" "postgres") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "mw.fullname" . }}-postgres
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+    {{- include "mw.componentLabels" (dict "root" . "component" "postgres") | nindent 4 }}
+spec:
+  serviceName: {{ include "mw.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mw.componentLabels" (dict "root" . "component" "postgres") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mw.componentLabels" (dict "root" . "component" "postgres") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "mw.serviceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "mw.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: postgres
+          image: {{ include "mw.image" (dict "root" . "image" .Values.postgres.image) }}
+          imagePullPolicy: {{ include "mw.imagePullPolicy" (dict "root" .) }}
+          env:
+            - { name: TZ, value: {{ .Values.timezone | quote }} }
+            - { name: POSTGRES_DB, value: postgres }
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: POSTGRES_SUPER_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: POSTGRES_SUPER_PASSWORD } }
+            - name: NEXTCLOUD_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: NEXTCLOUD_DB_PASSWORD } }
+            - name: MATTERMOST_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: MATTERMOST_DB_PASSWORD } }
+            - name: KEYCLOAK_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: KEYCLOAK_DB_PASSWORD } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: initdb, mountPath: /docker-entrypoint-initdb.d }
+          readinessProbe:
+            exec: { command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d postgres"] }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources: {{- toYaml .Values.postgres.resources | nindent 12 }}
+      volumes:
+        - name: initdb
+          configMap:
+            name: {{ include "mw.fullname" . }}-scripts
+            items: [{ key: init-databases.sh, path: 10-init-databases.sh }]
+        {{- if not .Values.postgres.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+  {{- if .Values.postgres.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: { requests: { storage: {{ .Values.postgres.persistence.size }} } }
+        {{- $sc := .Values.postgres.persistence.storageClass | default .Values.global.storageClass }}
+        {{- if $sc }}
+        storageClassName: {{ $sc | quote }}
+        {{- end }}
+  {{- end }}

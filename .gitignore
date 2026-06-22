@@ -11,6 +11,16 @@ config/keycloak/*.json
 # Backups
 backups/
 
+# Air-gapped artifacts (keep the dir, ignore downloaded content)
+config/nextcloud/apps-offline/*
+!config/nextcloud/apps-offline/.gitkeep
+*.tar
+magic-workflow-images.tar
+
+# Helm chart packages
+helm/**/charts/
+*.tgz
+
 # Docs build
 MagicWorkflow_Docs/site/
 MagicWorkflow_Docs/.venv/

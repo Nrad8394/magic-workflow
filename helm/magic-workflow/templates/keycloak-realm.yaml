@@ -1,0 +1,66 @@
+{{- if .Values.keycloak.importRealm }}
+{{- /* Realm contains OIDC client secrets, so it lives in a Secret, mounted into
+       Keycloak's import dir. Mirrors scripts/keycloak-realm.json.template. */}}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "mw.fullname" . }}-keycloak-realm
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  magicworkflow-realm.json: |
+    {
+      "realm": {{ .Values.keycloak.realm | quote }},
+      "enabled": true,
+      "displayName": "Magic Workflow",
+      "loginTheme": "keycloak",
+      "registrationAllowed": false,
+      "resetPasswordAllowed": true,
+      "rememberMe": true,
+      "sslRequired": "external",
+      "roles": {
+        "realm": [
+          { "name": "user", "description": "Standard Magic Workflow user" },
+          { "name": "admin", "description": "Magic Workflow administrator" }
+        ]
+      },
+      "clients": [
+        {
+          "clientId": "nextcloud",
+          "name": "Nextcloud",
+          "protocol": "openid-connect",
+          "enabled": true,
+          "publicClient": false,
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": false,
+          "secret": {{ .Values.secrets.oidcNextcloudSecret | quote }},
+          "redirectUris": [
+            "https://{{ .Values.hosts.nextcloud }}/apps/user_oidc/code",
+            "https://{{ .Values.hosts.nextcloud }}/*"
+          ],
+          "webOrigins": [ "https://{{ .Values.hosts.nextcloud }}" ],
+          "defaultClientScopes": [ "openid", "profile", "email", "roles" ],
+          "attributes": { "post.logout.redirect.uris": "https://{{ .Values.hosts.nextcloud }}/*" }
+        },
+        {
+          "clientId": "mattermost",
+          "name": "Mattermost",
+          "protocol": "openid-connect",
+          "enabled": true,
+          "publicClient": false,
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": false,
+          "secret": {{ .Values.secrets.oidcMattermostSecret | quote }},
+          "redirectUris": [
+            "https://{{ .Values.hosts.mattermost }}/signup/openid/complete",
+            "https://{{ .Values.hosts.mattermost }}/login/sso/openid",
+            "https://{{ .Values.hosts.mattermost }}/*"
+          ],
+          "webOrigins": [ "https://{{ .Values.hosts.mattermost }}" ],
+          "defaultClientScopes": [ "openid", "profile", "email", "roles" ],
+          "attributes": { "post.logout.redirect.uris": "https://{{ .Values.hosts.mattermost }}/*" }
+        }
+      ]
+    }
+{{- end }}

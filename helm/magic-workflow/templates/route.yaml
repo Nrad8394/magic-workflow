@@ -1,0 +1,35 @@
+{{- if eq (include "mw.isOpenShift" .) "true" }}
+{{- $fullname := include "mw.fullname" . -}}
+{{- $svc := dict
+    "nextcloud"    (dict "name" (printf "%s-nextcloud-web" $fullname) "port" 80   "host" .Values.hosts.nextcloud)
+    "mattermost"   (dict "name" (printf "%s-mattermost" $fullname)    "port" 8065 "host" .Values.hosts.mattermost)
+    "collabora"    (dict "name" (printf "%s-collabora" $fullname)     "port" 9980 "host" .Values.hosts.collabora)
+    "keycloak"     (dict "name" (printf "%s-keycloak" $fullname)      "port" 8080 "host" .Values.hosts.keycloak)
+    "minio"        (dict "name" (printf "%s-minio" $fullname)         "port" 9001 "host" .Values.hosts.minioConsole)
+-}}
+{{- if .Values.homer.enabled }}
+{{- $_ := set $svc "homer" (dict "name" (printf "%s-homer" $fullname) "port" 8080 "host" .Values.hosts.homer) -}}
+{{- end }}
+{{- if .Values.monitoring.enabled }}
+{{- $_ := set $svc "grafana" (dict "name" (printf "%s-grafana" $fullname) "port" 3000 "host" .Values.hosts.grafana) -}}
+{{- end }}
+{{- range $k, $v := $svc }}
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ printf "%s-%s" $fullname $k }}
+  labels:
+    {{- include "mw.labels" $ | nindent 4 }}
+spec:
+  host: {{ $v.host | quote }}
+  to:
+    kind: Service
+    name: {{ $v.name }}
+  port:
+    targetPort: {{ $v.port }}
+  tls:
+    termination: {{ $.Values.route.tls.termination }}
+    insecureEdgeTerminationPolicy: {{ $.Values.route.tls.insecureEdgeTerminationPolicy }}
+{{- end }}
+{{- end }}

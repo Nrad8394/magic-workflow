@@ -1,0 +1,21 @@
+apiVersion: v2
+name: magic-workflow
+description: >-
+  Self-hosted collaboration suite — Nextcloud, Mattermost, Collabora Online,
+  Keycloak (SSO), MinIO (S3), PostgreSQL, Redis, and optional monitoring —
+  as a single umbrella Helm chart for vanilla Kubernetes and OpenShift.
+type: application
+version: 0.1.0
+appVersion: "1.0"
+home: https://github.com/Nrad8394/magic-workflow
+keywords:
+  - nextcloud
+  - mattermost
+  - collabora
+  - keycloak
+  - minio
+  - collaboration
+  - sso
+  - openshift
+maintainers:
+  - name: Magic Workflow

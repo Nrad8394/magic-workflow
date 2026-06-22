@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "mw.fullname" . }}-minio-init
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        {{- include "mw.componentLabels" (dict "root" . "component" "minio-init") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "mw.serviceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "mw.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: minio-init
+          image: {{ include "mw.image" (dict "root" . "image" .Values.minio.mcImage) }}
+          imagePullPolicy: {{ include "mw.imagePullPolicy" (dict "root" .) }}
+          command: ["/bin/sh", "/init/minio-init.sh"]
+          env:
+            - { name: MINIO_ENDPOINT, value: "http://{{ include "mw.fullname" . }}-minio:9000" }
+            - { name: NEXTCLOUD_S3_BUCKET, value: {{ .Values.minio.buckets.nextcloud | quote }} }
+            - { name: MATTERMOST_S3_BUCKET, value: {{ .Values.minio.buckets.mattermost | quote }} }
+            - name: MINIO_ROOT_USER
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: MINIO_ROOT_USER } }
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: MINIO_ROOT_PASSWORD } }
+            - name: S3_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: S3_ACCESS_KEY } }
+            - name: S3_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: {{ include "mw.secretName" . }}, key: S3_SECRET_KEY } }
+          volumeMounts:
+            - { name: scripts, mountPath: /init }
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ include "mw.fullname" . }}-scripts
+            items: [{ key: minio-init.sh, path: minio-init.sh }]

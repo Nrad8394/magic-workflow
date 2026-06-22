@@ -1,0 +1,22 @@
+# Air-gapped / offline overlay.
+#   1. Mirror every image to your private registry (see scripts/mirror-images.sh
+#      or `make mirror-images`), then set imageRegistry to that registry with a
+#      trailing slash. The chart prepends it to every image reference.
+#   2. If the registry needs auth, create a pull secret and list it below.
+#
+# Note: Nextcloud's before-starting hook normally downloads apps from GitHub.
+# In an air-gapped cluster either pre-bake them into a custom nextcloud image,
+# or allow egress to github.com for the user_oidc / richdocuments / external
+# release tarballs.
+global:
+  imageRegistry: "registry.internal.example.com/"
+  imagePullSecrets:
+    - name: registry-pull
+  # imagePullPolicy: IfNotPresent
+
+ingress:
+  certManager:
+    enabled: false          # no public ACME reachability offline; supply certs
+  tls:
+    enabled: true
+    wildcardSecretName: magic-workflow-tls

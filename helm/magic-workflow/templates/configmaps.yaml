@@ -1,0 +1,82 @@
+---
+# Init/wiring scripts, taken verbatim from the repo (mirrored into files/).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mw.fullname" . }}-scripts
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+data:
+  init-databases.sh: |
+{{ .Files.Get "files/init-databases.sh" | indent 4 }}
+  minio-init.sh: |
+{{ .Files.Get "files/minio-init.sh" | indent 4 }}
+  install-apps.sh: |
+{{ .Files.Get "files/install-apps.sh" | indent 4 }}
+  nc-configure.sh: |
+{{ .Files.Get "files/nc-configure.sh" | indent 4 }}
+---
+# Nextcloud web (nginx) + PHP tuning, verbatim from the repo.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mw.fullname" . }}-nextcloud-conf
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+data:
+  # app(fpm) + web(nginx) run in one pod, so the FPM upstream is localhost.
+  nginx.conf: |
+{{ .Files.Get "files/nextcloud-nginx.conf" | replace "nextcloud-app:9000" "127.0.0.1:9000" | indent 4 }}
+  zz-custom.ini: |
+{{ .Files.Get "files/php-custom.ini" | indent 4 }}
+{{- if .Values.homer.enabled }}
+---
+# Homer dashboard config, rendered with the configured hostnames.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mw.fullname" . }}-homer
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+data:
+  config.yml: |
+    title: "Magic Workflow"
+    subtitle: "Self-hosted collaboration suite"
+    logo: false
+    header: true
+    footer: '<p>Magic Workflow — your organisation''s private cloud</p>'
+    colors:
+      light: { primary: "#3367d6", background: "#f5f7fa" }
+      dark:  { primary: "#5b8def", background: "#0f172a" }
+    links: []
+    services:
+      - name: "Collaboration"
+        icon: "fas fa-cloud"
+        items:
+          - name: "Nextcloud"
+            subtitle: "Files, calendar, contacts, office"
+            url: "https://{{ .Values.hosts.nextcloud }}"
+            target: "_blank"
+          - name: "Mattermost"
+            subtitle: "Team chat, calls, playbooks"
+            url: "https://{{ .Values.hosts.mattermost }}"
+            target: "_blank"
+          - name: "Collabora (admin)"
+            subtitle: "Office backend"
+            url: "https://{{ .Values.hosts.collabora }}/browser/dist/admin/admin.html"
+            target: "_blank"
+      - name: "Platform"
+        icon: "fas fa-cogs"
+        items:
+          - name: "Keycloak (SSO)"
+            url: "https://{{ .Values.hosts.keycloak }}"
+            target: "_blank"
+          - name: "MinIO Console"
+            url: "https://{{ .Values.hosts.minioConsole }}"
+            target: "_blank"
+          {{- if .Values.monitoring.enabled }}
+          - name: "Grafana"
+            url: "https://{{ .Values.hosts.grafana }}"
+            target: "_blank"
+          {{- end }}
+{{- end }}

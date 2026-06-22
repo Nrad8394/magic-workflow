@@ -2,10 +2,24 @@
 # Magic Workflow — Operations Makefile   (run `make` for the full list)
 # =============================================================================
 
-COMPOSE      := docker compose
-FULL         := docker compose -f docker-compose.yml -f docker-compose.monitoring.yml
+# Container engine — `make <target> ENGINE=podman` runs the whole suite on
+# Podman/RHEL instead of Docker. Defaults preserve the original Docker behaviour.
+ENGINE       ?= docker
+ifeq ($(ENGINE),podman)
+  COMPOSE_BIN    := $(shell command -v podman-compose >/dev/null 2>&1 && echo podman-compose || echo "podman compose")
+  PODMAN_OVERLAY := -f docker-compose.podman.yml
+else
+  COMPOSE_BIN    := docker compose
+  PODMAN_OVERLAY :=
+endif
+# Core uses the default compose file; the Podman overlay only adjusts the
+# monitoring/ops services (docker.sock paths), so it rides on FULL alone.
+COMPOSE      := $(COMPOSE_BIN)
+FULL         := $(COMPOSE_BIN) -f docker-compose.yml -f docker-compose.monitoring.yml $(PODMAN_OVERLAY)
 ENV_FILE     := .env
 OCC          := $(COMPOSE) exec -u www-data nextcloud-app php occ
+# Exported so the helper scripts (via scripts/lib/engine.sh) use the same engine.
+export ENGINE
 
 check-env:
 	@test -f $(ENV_FILE) || (echo "ERROR: .env not found. Run: make setup" && exit 1)
@@ -14,6 +28,14 @@ check-env:
 .PHONY: setup
 setup:                 ## First-time setup: .env + secrets + Keycloak realm + TLS cert
 	@bash setup.sh
+
+.PHONY: install-rhel
+install-rhel:          ## RHEL/Rocky/Alma/Fedora: install Podman + open firewall (run once, then `make setup`)
+	@bash scripts/install-rhel.sh
+
+.PHONY: install-server
+install-server:        ## Debian/Ubuntu: install engine + firewall + systemd unit (production hardening)
+	@bash scripts/install-server.sh
 
 .PHONY: trust-cert
 trust-cert:            ## Trust the local self-signed cert in your OS store (stops browser warnings)
@@ -148,6 +170,52 @@ sso-info: check-env    ## Print the OIDC endpoints + steps to connect Nextcloud 
 .PHONY: backup
 backup: check-env      ## Run an on-demand DB backup now (into the backups volume)
 	$(FULL) run --rm backup /usr/local/bin/backup.sh
+
+# ── OFFLINE / AIR-GAPPED ──────────────────────────────────────────────────────
+.PHONY: fetch-nc-apps
+fetch-nc-apps:         ## Pre-download Nextcloud apps for offline install (-> config/nextcloud/apps-offline)
+	@bash scripts/fetch-nc-apps.sh
+
+.PHONY: mirror-images
+mirror-images:         ## Pull+save all images to a tar bundle (ENGINE-aware). Override: BUNDLE=...
+	@bash scripts/mirror-images.sh save $(BUNDLE)
+
+.PHONY: push-images
+push-images:           ## Pull+retag+push all images to a registry: make push-images REGISTRY=reg.example.com/
+	@bash scripts/mirror-images.sh push $(REGISTRY)
+
+# ── KUBERNETES / HELM ─────────────────────────────────────────────────────────
+HELM_CHART   := helm/magic-workflow
+HELM_RELEASE ?= mw
+HELM_NS      ?= magic
+HELM_VALUES  ?= $(HELM_CHART)/values-dev.yaml
+
+.PHONY: helm-lint
+helm-lint:             ## Lint the umbrella Helm chart
+	helm lint $(HELM_CHART)
+
+.PHONY: helm-template
+helm-template:         ## Render the chart with HELM_VALUES (default: values-dev.yaml)
+	helm template $(HELM_RELEASE) $(HELM_CHART) -f $(HELM_VALUES)
+
+.PHONY: helm-install
+helm-install:          ## Install/upgrade into a cluster (HELM_RELEASE/HELM_NS/HELM_VALUES overridable)
+	helm upgrade --install $(HELM_RELEASE) $(HELM_CHART) -n $(HELM_NS) --create-namespace -f $(HELM_VALUES)
+
+.PHONY: helm-uninstall
+helm-uninstall:        ## Remove the release (keeps PVCs)
+	helm uninstall $(HELM_RELEASE) -n $(HELM_NS)
+
+.PHONY: helm-sync
+helm-sync:             ## Re-copy repo config/scripts into the chart's files/ dir
+	@cp config/postgres/init-databases.sh $(HELM_CHART)/files/init-databases.sh
+	@cp scripts/minio-init.sh $(HELM_CHART)/files/minio-init.sh
+	@cp config/nextcloud/hooks/install-apps.sh $(HELM_CHART)/files/install-apps.sh
+	@cp config/nextcloud/nginx.conf $(HELM_CHART)/files/nextcloud-nginx.conf
+	@cp config/nextcloud/php/zz-custom.ini $(HELM_CHART)/files/php-custom.ini
+	@cp config/loki/loki-config.yml $(HELM_CHART)/files/loki-config.yml
+	@cp config/backup/backup.sh $(HELM_CHART)/files/backup.sh
+	@echo "Synced repo config -> $(HELM_CHART)/files/ (nc-configure.sh is chart-only)"
 
 # ── DOCS ─────────────────────────────────────────────────────────────────────
 .PHONY: docs

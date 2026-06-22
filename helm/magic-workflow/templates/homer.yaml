@@ -1,0 +1,52 @@
+{{- if .Values.homer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mw.fullname" . }}-homer
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+    {{- include "mw.componentLabels" (dict "root" . "component" "homer") | nindent 4 }}
+spec:
+  ports:
+    - { name: http, port: 8080, targetPort: 8080 }
+  selector:
+    {{- include "mw.componentLabels" (dict "root" . "component" "homer") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mw.fullname" . }}-homer
+  labels:
+    {{- include "mw.labels" . | nindent 4 }}
+    {{- include "mw.componentLabels" (dict "root" . "component" "homer") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mw.componentLabels" (dict "root" . "component" "homer") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mw.componentLabels" (dict "root" . "component" "homer") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "mw.serviceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "mw.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: homer
+          image: {{ include "mw.image" (dict "root" . "image" .Values.homer.image) }}
+          imagePullPolicy: {{ include "mw.imagePullPolicy" (dict "root" .) }}
+          env:
+            - { name: TZ, value: {{ .Values.timezone | quote }} }
+            - { name: INIT_ASSETS, value: "1" }
+          ports:
+            - { name: http, containerPort: 8080 }
+          volumeMounts:
+            - { name: config, mountPath: /www/assets/config.yml, subPath: config.yml }
+          resources: {{- toYaml .Values.homer.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap: { name: {{ include "mw.fullname" . }}-homer }
+{{- end }}

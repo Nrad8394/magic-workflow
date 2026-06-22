@@ -9,6 +9,19 @@ Production deployment on a single host (VM or bare metal). For clusters see
 - 16 GB RAM+ for a small org; put `minio_data` and `db_data` on durable storage.
 - Open inbound **80** and **443** only. Everything else stays internal.
 
+!!! tip "Automated bootstrap + hardening"
+    On **Debian/Ubuntu**, `scripts/install-server.sh` does steps 1 and 6 for you —
+    installs Docker, enables ufw (22/80/443), fail2ban and unattended security
+    upgrades, and installs a systemd unit so the stack starts on boot:
+
+    ```bash
+    git clone <your-fork> magic-workflow && cd magic-workflow
+    sudo bash scripts/install-server.sh
+    ```
+
+    On **RHEL/Rocky/Alma/Fedora** use [`install-rhel.sh`](install-rhel.md) instead
+    (Podman) and run subsequent `make` commands with `ENGINE=podman`.
+
 ## 2. DNS
 
 Create A/AAAA records pointing each subdomain at the server:
@@ -76,6 +89,9 @@ make urls
 
 ## 6. Post-install hardening
 
+Much of this is automated by `sudo bash scripts/install-server.sh` (firewall,
+fail2ban, automatic security updates, boot-time systemd unit). Then verify:
+
 - [ ] Confirm only 80/443 are exposed (`ss -tlnp`); firewall the rest.
 - [ ] Wire [SSO](sso.md); keep one break-glass local admin per app.
 - [ ] Verify [backups](backups.md) run and **test a restore**.
@@ -84,6 +100,8 @@ make urls
 - [ ] Set MinIO + DB to durable/replicated storage; consider managed services.
 - [ ] Review Watchtower auto-update policy (opt-in by label).
 - [ ] Document the `.env` secrets in your vault; restrict file perms (`chmod 600 .env`).
+- [ ] Confirm boot persistence: `systemctl status magic-workflow` (installed by
+      `install-server.sh`; or `config/systemd/magic-workflow.service` manually).
 
 See the [Enterprise guide](enterprise.md) for HA, external services and
 compliance considerations.
