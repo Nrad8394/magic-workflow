@@ -68,6 +68,13 @@ else
     || echo "    [!!] could not enable podman.socket (ops profile optional)"
 fi
 
+# ── persistent journald (so the monitoring promtail can ship Podman logs) ─────
+if [ ! -d /var/log/journal ]; then
+  echo "==> Enabling persistent journald (/var/log/journal) for log shipping ..."
+  $SUDO mkdir -p /var/log/journal
+  $SUDO systemctl restart systemd-journald 2>/dev/null || true
+fi
+
 # ── SELinux note ─────────────────────────────────────────────────────────────
 if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce)" = "Enforcing" ]; then
   echo "==> SELinux is Enforcing (good). Bind mounts use :z labels — no extra steps."

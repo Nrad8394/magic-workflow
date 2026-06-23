@@ -63,8 +63,8 @@ policy. If you add your own bind mount, append `:ro,z` (or `:z`).
 |---------|----------|
 | Compose command | `podman-compose` (or `podman compose`), auto-detected |
 | Container names | resolved via `compose ps -q` (format-agnostic) |
-| Log shipping | promtail reads the **journald** journal (`docker-compose.podman.yml`) |
-| Auto-update | watchtower via the Podman Docker-compatible socket, or `podman auto-update` |
+| Log shipping | a journald-reading promtail (`docker-compose.podman.yml`); needs persistent journald (install-rhel.sh enables it) |
+| Auto-update | watchtower is Docker-only and **not run** on Podman — use `podman auto-update` (label images `io.containers.autoupdate=registry` + enable `podman-auto-update.timer`) |
 | Low ports | `ip_unprivileged_port_start=80` for rootless |
 
 ## Boot persistence

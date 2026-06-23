@@ -7,15 +7,17 @@
 ENGINE       ?= docker
 ifeq ($(ENGINE),podman)
   COMPOSE_BIN    := $(shell command -v podman-compose >/dev/null 2>&1 && echo podman-compose || echo "podman compose")
-  PODMAN_OVERLAY := -f docker-compose.podman.yml
+  # Podman: journald-based promtail, no watchtower (Docker-socket bound).
+  OPS_OVERLAY    := -f docker-compose.podman.yml
 else
   COMPOSE_BIN    := docker compose
-  PODMAN_OVERLAY :=
+  # Docker: promtail (docker logs) + watchtower auto-update.
+  OPS_OVERLAY    := -f docker-compose.ops.yml
 endif
-# Core uses the default compose file; the Podman overlay only adjusts the
-# monitoring/ops services (docker.sock paths), so it rides on FULL alone.
+# Core uses the default compose file; the ops overlay (engine-specific) only
+# adds the log-shipping / auto-update services, so it rides on FULL alone.
 COMPOSE      := $(COMPOSE_BIN)
-FULL         := $(COMPOSE_BIN) -f docker-compose.yml -f docker-compose.monitoring.yml $(PODMAN_OVERLAY)
+FULL         := $(COMPOSE_BIN) -f docker-compose.yml -f docker-compose.monitoring.yml $(OPS_OVERLAY)
 ENV_FILE     := .env
 OCC          := $(COMPOSE) exec -u www-data nextcloud-app php occ
 # Exported so the helper scripts (via scripts/lib/engine.sh) use the same engine.

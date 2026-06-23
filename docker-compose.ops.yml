@@ -1,0 +1,41 @@
+# =============================================================================
+# Docker-only ops overlay — promtail (log shipping) + watchtower (auto-update).
+# Both bind the Docker socket / Docker's container-log path, so they only run on
+# the Docker engine. `make up-full` (ENGINE=docker) includes this automatically.
+# On Podman the Makefile uses docker-compose.podman.yml instead.
+# =============================================================================
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  promtail:
+    image: ${IMAGE_REGISTRY:-}grafana/promtail:${PROMTAIL_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./config/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro,z
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [internal]
+
+  watchtower:
+    image: ${IMAGE_REGISTRY:-}containrrr/watchtower:${WATCHTOWER_IMAGE_TAG}
+    restart: unless-stopped
+    logging: *default-logging
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      TZ: ${TZ}
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_SCHEDULE: "0 0 4 * * *"   # 04:00 daily; review before enabling auto-update in prod
+      WATCHTOWER_LABEL_ENABLE: "true"       # only update containers opted-in via label
+      # Pin the Docker API version — watchtower 1.7.1 negotiates v1.25, which
+      # modern daemons (Docker 25+/API >= 1.40) reject. 1.44 is widely supported.
+      DOCKER_API_VERSION: "1.44"
+    networks: [internal]
+# `internal` network is inherited from docker-compose.yml (always merged in).
