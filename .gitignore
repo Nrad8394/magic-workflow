@@ -2,8 +2,12 @@
 .env
 *.env.local
 
-# Generated TLS material
+# Generated TLS material / private keys / cert bundles — NEVER commit these.
 config/proxy/tls/*.pem
+*.pem
+*.pfx
+*.p12
+*.key
 
 # Generated Keycloak realm (rendered from scripts/keycloak-realm.json.template)
 config/keycloak/*.json
