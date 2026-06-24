@@ -83,5 +83,6 @@ nav:
   - Operations: operations.md
   - Enterprise guide: enterprise.md
   - Kubernetes: kubernetes.md
+  - Expose via Windows/IIS: windows-iis.md
   - Air-gapped / offline: air-gapped.md
   - Troubleshooting: troubleshooting.md

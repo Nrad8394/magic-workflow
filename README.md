@@ -44,6 +44,7 @@ The same suite runs across single hosts and clusters. Pick your path:
 | **RHEL / Rocky / Alma / Fedora** (Podman) | `sudo bash scripts/install-rhel.sh` then `make up ENGINE=podman` | [install-rhel](MagicWorkflow_Docs/docs/install-rhel.md) |
 | **Kubernetes** (kind/k3s/EKS/GKE/AKS) | `helm install … helm/magic-workflow` | [kubernetes](MagicWorkflow_Docs/docs/kubernetes.md) |
 | **OpenShift** | `helm … -f values-openshift.yaml` (Routes + SCC) | [kubernetes](MagicWorkflow_Docs/docs/kubernetes.md) |
+| **Behind Windows Server / IIS** | IIS ARR reverse proxy → VM nginx (`config/iis/web.config`) | [windows-iis](MagicWorkflow_Docs/docs/windows-iis.md) |
 | **Air-gapped / offline** | `make mirror-images` + `make fetch-nc-apps` | [air-gapped](MagicWorkflow_Docs/docs/air-gapped.md) |
 
 The Docker Compose stack is engine-agnostic: every `make` target accepts
