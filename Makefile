@@ -2,9 +2,9 @@
 # Magic Workflow — Operations Makefile   (run `make` for the full list)
 # =============================================================================
 
-# Container engine — `make <target> ENGINE=podman` runs the whole suite on
-# Podman/RHEL instead of Docker. Defaults preserve the original Docker behaviour.
-ENGINE       ?= docker
+# Container engine — auto-detected: Docker if present, else Podman. Override
+# explicitly with `make <target> ENGINE=podman` (or `ENGINE=docker`).
+ENGINE       ?= $(shell command -v docker >/dev/null 2>&1 && echo docker || echo podman)
 ifeq ($(ENGINE),podman)
   COMPOSE_BIN    := $(shell command -v podman-compose >/dev/null 2>&1 && echo podman-compose || echo "podman compose")
   # Podman: journald-based promtail, no watchtower (Docker-socket bound).

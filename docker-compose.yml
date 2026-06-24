@@ -29,6 +29,16 @@ services:
     restart: unless-stopped
     logging: *default-logging
     security_opt: [no-new-privileges:true]
+    # Write nginx's resolver from the container's own DNS before the normal
+    # nginx entrypoint runs — Docker uses 127.0.0.11, Podman/netavark uses the
+    # network gateway. nginx.conf includes /etc/nginx/resolver.conf. ($$ -> $.)
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        ns=$$(awk '/^nameserver/{print $$2; exit}' /etc/resolv.conf 2>/dev/null)
+        echo "resolver $${ns:-127.0.0.11} valid=30s ipv6=off;" > /etc/nginx/resolver.conf
+        exec /docker-entrypoint.sh nginx -g 'daemon off;'
     depends_on:
       nextcloud-web:
         condition: service_started
