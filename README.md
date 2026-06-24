@@ -61,11 +61,12 @@ The Docker Compose stack is engine-agnostic: every `make` target accepts
 make setup        # .env + strong random secrets + Keycloak realm + self-signed TLS
 ```
 
-Add the printed line to your hosts file so the subdomains resolve locally:
+Add the printed line to your hosts file so the subdomains resolve locally.
+**Keep it on a single line** — `/etc/hosts` does not support `\` line
+continuation (a wrapped line silently drops every host after the break):
 
 ```
-127.0.0.1  cloud.magic.test chat.magic.test office.magic.test \
-           id.magic.test grafana.magic.test dash.magic.test s3.magic.test
+127.0.0.1  cloud.magic.test chat.magic.test office.magic.test id.magic.test grafana.magic.test dash.magic.test s3.magic.test
 ```
 
 Then:
